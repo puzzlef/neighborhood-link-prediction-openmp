@@ -193,6 +193,7 @@ inline void predictLinksHubPromotedLoopU(vector<tuple<K, K, V>>& a, vector<K>& v
  */
 template <class G, class K, class V>
 inline void predictLinksHubPromotedLoopOmpU(vector<vector<tuple<K, K, V>>*>& as, vector<vector<K>*>& vedgs, vector<vector<K>*>& veout, const G& x, V SMIN) {
+  size_t S = x.span();
   #pragma omp parallel for schedule(dynamic, 2048)
   for (K u=0; u<S; ++u) {
     if (!x.hasVertex(u)) continue;
@@ -204,7 +205,7 @@ inline void predictLinksHubPromotedLoopOmpU(vector<vector<tuple<K, K, V>>*>& as,
     // Get hub promoted score, and add to prediction list.
     for (K v : *vedgs[t]) {
       V score = V((*veout[t])[v]) / min(x.degree(u), x.degree(v));
-      if (score < w) continue;
+      if (score < SMIN) continue;
       *as[t].push_back({u, v, score});
       *as[t].push_back({v, u, score});
     }
@@ -248,10 +249,10 @@ inline auto predictLinksHubPromotedOmp(const G& x, const PredictLinkOptions<V>& 
   size_t S = x.span();
   int    T = omp_get_max_threads();
   // Setup per-thread prediction lists.
-  vector<tuple<K, K, W>>  a;
-  vector<tuple<K, K, W>*> as(T);
+  vector<tuple<K, K, V>>  a;
+  vector<tuple<K, K, V>*> as(T);
   for (int t=0; t<T; ++t)
-    as[t] = new vector<tuple<K, K, W>>();
+    as[t] = new vector<tuple<K, K, V>>();
   // Setup per-thread hashtables.
   vector<vector<K>*> vedgs(T);
   vector<vector<K>*> veout(T);
@@ -264,7 +265,7 @@ inline auto predictLinksHubPromotedOmp(const G& x, const PredictLinkOptions<V>& 
   }, o.repeat);
   // Merge per-thread prediction lists.
   for (int t=0; t<T; ++t)
-    a.insert(a.end(), (*as[t]).begin(), (*as[t].end());
+    a.insert(a.end(), (*as[t]).begin(), (*as[t]).end());
   // Free per-thread prediction lists.
   for (int t=0; t<T; ++t)
     delete as[t];
