@@ -2,6 +2,7 @@
 #include <cstdio>
 #include <utility>
 #include <random>
+#include <tuple>
 #include <vector>
 #include <string>
 #include <iostream>
@@ -54,81 +55,6 @@ inline double getModularity(const G& x, const R& a, double M) {
 
 
 
-#pragma region EXPERIMENTAL SETUP
-/**
- * Run a function on each batch update, with a specified range of batch sizes.
- * @param x original graph
- * @param rnd random number generator
- * @param fn function to run on each batch update
- */
-template <class G, class R, class F>
-inline void runBatches(const G& x, R& rnd, F fn) {
-  using  E = typename G::edge_value_type;
-  double d = BATCH_DELETIONS_BEGIN;
-  double i = BATCH_INSERTIONS_BEGIN;
-  for (int epoch=0;; ++epoch) {
-    for (int r=0; r<REPEAT_BATCH; ++r) {
-      auto y  = duplicate(x);
-      for (int sequence=0; sequence<BATCH_LENGTH; ++sequence) {
-      auto deletions  = removeRandomEdges(y, rnd, size_t(d * x.size()/2), 1, x.span()-1);
-      auto insertions = addRandomEdges   (y, rnd, size_t(i * x.size()/2), 1, x.span()-1, E(1));
-        fn(y, d, deletions, i, insertions, sequence, epoch);
-      }
-    }
-    if (d>=BATCH_DELETIONS_END && i>=BATCH_INSERTIONS_END) break;
-    d BATCH_DELETIONS_STEP;
-    i BATCH_INSERTIONS_STEP;
-    d = min(d, double(BATCH_DELETIONS_END));
-    i = min(i, double(BATCH_INSERTIONS_END));
-  }
-}
-
-
-/**
- * Run a function on each number of threads, for a specific epoch.
- * @param epoch epoch number
- * @param fn function to run on each number of threads
- */
-template <class F>
-inline void runThreadsWithBatch(int epoch, F fn) {
-  int t = NUM_THREADS_BEGIN;
-  for (int l=0; l<epoch && t<=NUM_THREADS_END; ++l)
-    t NUM_THREADS_STEP;
-  omp_set_num_threads(t);
-  fn(t);
-  omp_set_num_threads(MAX_THREADS);
-}
-
-
-/**
- * Run a function on each number of threads, with a specified range of thread counts.
- * @param fn function to run on each number of threads
- */
-template <class F>
-inline void runThreadsAll(F fn) {
-  for (int t=NUM_THREADS_BEGIN; t<=NUM_THREADS_END; t NUM_THREADS_STEP) {
-    omp_set_num_threads(t);
-    fn(t);
-    omp_set_num_threads(MAX_THREADS);
-  }
-}
-
-
-/**
- * Run a function on each number of threads, with a specified range of thread counts or for a specific epoch (depending on NUM_THREADS_MODE).
- * @param epoch epoch number
- * @param fn function to run on each number of threads
- */
-template <class F>
-inline void runThreads(int epoch, F fn) {
-  if (NUM_THREADS_MODE=="with-batch") runThreadsWithBatch(epoch, fn);
-  else runThreadsAll(fn);
-}
-#pragma endregion
-
-
-
-
 #pragma region PERFORM EXPERIMENT
 /**
  * Perform the experiment.
@@ -145,44 +71,38 @@ void runExperiment(const G& x) {
   vector<K> *init = nullptr;
   double M = edgeWeightOmp(x)/2;
   // Follow a specific result logging format, which can be easily parsed later.
-  auto glog = [&](const auto& ans, const char *technique, int numThreads, const auto& y, auto M, auto deletionsf, auto insertionsf) {
+  auto glog = [&](const auto& ans, const auto& pre, const char *technique, int numThreads, const auto& y, auto M, auto predictf) {
     printf(
-      "{-%.3e/+%.3e batchf, %03d threads} -> "
-      "{%09.1fms, %09.1fms preproc, %04d iters, %01.9f modularity} %s\n",
-      double(deletionsf), double(insertionsf), numThreads,
-      ans.time, ans.preprocessingTime, ans.iterations, getModularity(y, ans, M), technique
+      "{+%.3e predictf, +%.3e predict, %03d threads} -> "
+      "{%09.1fms, %09.1fms preproc, %09.1fms predict, %04d iters, %01.9f modularity} %s\n",
+      double(predictf), double(pre.edges.size()), numThreads,
+      ans.time, ans.preprocessingTime, pre.time, ans.iterations, getModularity(y, ans, M), technique
     );
   };
   // Get community memberships on original graph (static).
-  auto b0 = louvainStaticOmp(x, init);
-  glog(b0, "louvainStaticOmpOriginal", MAX_THREADS, x, M, 0.0, 0.0);
-  auto f0 = rakStaticOmp(x, init);
-  glog(f0, "rakStaticOmpOriginal", MAX_THREADS, x, M, 0.0, 0.0);
-  // Get community memberships on updated graph (dynamic).
-  runBatches(x, rnd, [&](const auto& y, auto deletionsf, const auto& deletions, auto insertionsf, const auto& insertions, int sequence, int epoch) {
+  auto p0 = PredictLinkResult<K, V>();
+  auto a0 = louvainStaticOmp(x, init);
+  glog(a0, p0, "louvainStaticOmpOriginal", MAX_THREADS, x, M, 0.0);
+  // Predict links and obtain updated community memberships.
+  vector<float> percents {0.00001, 0.00005, 0.0001};
+  for (float percent : percents) {
+    // Predict links using hub promoted score.
+    auto p1 = predictLinksHubPromotedOmp(x, {repeat, V()});
+    auto fl = [](const tuple<K, K, V>& x, const tuple<K, K, V>& y) { return get<2>(x) > get<2>(y); };
+    vector<tuple<K, K>>      deletions;
+    vector<tuple<K, K, V>>&  insertions = p1.edges;
+    sort(insertions.begin(), insertions.end(), fl);
+    insertions.resize(size_t(percent * insertions.size()));
+    // Add predicted links to original graph.
+    auto y = duplicate(x);
+    for (const auto& [u, v, w] : insertions)
+      y.addEdge(u, v, V(1));
+    updateOmpU(y);
     double M = edgeWeightOmp(y)/2;
-    // Adjust number of threads.
-    runThreads(epoch, [&](int numThreads) {
-      auto flog = [&](const auto& ans, const char *technique) {
-        glog(ans, technique, numThreads, y, M, deletionsf, insertionsf);
-      };
-      // Find static Louvain.
-      auto b1 = louvainStaticOmp(y, init, {repeat});
-      flog(b1, "louvainStaticOmp");
-      // Find frontier based dynamic Louvain.
-      auto b2 = louvainDynamicFrontierOmp(y, deletions, insertions, &b0.membership, {repeat});
-      flog(b2, "louvainDynamicFrontierOmp");
-      // Find static RAK (strict).
-      auto f1 = rakStaticOmp(y, init, {repeat});
-      flog(f1, "rakStaticOmp");
-      // Find frontier based dynamic RAK (strict).
-      auto f2 = rakDynamicFrontierOmp(y, deletions, insertions, &f0.membership, {repeat});
-      flog(f2, "rakDynamicFrontierOmp");
-      // Find frontier based dynamic Hybrid Louvain-RAK (strict).
-      auto f3 = rakDynamicFrontierOmp(y, deletions, insertions, &b0.membership, {repeat});
-      flog(f3, "louvainRakDynamicFrontierOmp");
-    });
-  });
+    // Update community memberships on updated graph.
+    auto a1 = rakDynamicFrontierOmp(y, deletions, insertions, &a0.membership, {repeat});
+    glog(a1, p1, "predictLinksHubPromotedOmp_louvainRakDynamicFrontierOmp", MAX_THREADS, y, M, percent);
+  }
 }
 
 

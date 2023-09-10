@@ -62,6 +62,12 @@ struct PredictLinkResult {
 
   #pragma region CONSTRUCTORS
   /**
+   * Empty Result of Link Prediction algorithm.
+   */
+  PredictLinkResult() :
+  edges(), time() {}
+
+  /**
    * Result of Link Prediction algorithm.
    * @param edges predicted links (undirected)
    * @param time time spent in milliseconds
@@ -206,8 +212,8 @@ inline void predictLinksHubPromotedLoopOmpU(vector<vector<tuple<K, K, V>>*>& as,
     for (K v : *vedgs[t]) {
       V score = V((*veout[t])[v]) / min(x.degree(u), x.degree(v));
       if (score < SMIN) continue;
-      *as[t].push_back({u, v, score});
-      *as[t].push_back({v, u, score});
+      (*as[t]).push_back({u, v, score});
+      (*as[t]).push_back({v, u, score});
     }
   }
 }
@@ -250,7 +256,7 @@ inline auto predictLinksHubPromotedOmp(const G& x, const PredictLinkOptions<V>& 
   int    T = omp_get_max_threads();
   // Setup per-thread prediction lists.
   vector<tuple<K, K, V>>  a;
-  vector<tuple<K, K, V>*> as(T);
+  vector<vector<tuple<K, K, V>>*> as(T);
   for (int t=0; t<T; ++t)
     as[t] = new vector<tuple<K, K, V>>();
   // Setup per-thread hashtables.
@@ -271,7 +277,7 @@ inline auto predictLinksHubPromotedOmp(const G& x, const PredictLinkOptions<V>& 
     delete as[t];
   // Free per-thread hashtables.
   predictFreeHashtablesW(vedgs, veout);
-  return a;
+  return PredictLinkResult<K, V>(a, ta);
 }
 #endif
 #pragma endregion
