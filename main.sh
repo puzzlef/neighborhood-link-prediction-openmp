@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-src="communities-openmp-dynamic"
+src="link-predicted-communities-openmp-dynamic"
 out="$HOME/Logs/$src$1.log"
 ulimit -s unlimited
 printf "" > "$out"

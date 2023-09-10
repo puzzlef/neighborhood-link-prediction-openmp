@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-src="communities-openmp-dynamic"
+src="link-predicted-communities-openmp-dynamic"
 ulimit -s unlimited
 
 # Download program
