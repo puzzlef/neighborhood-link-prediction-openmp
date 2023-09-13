@@ -200,10 +200,12 @@ inline void predictLinksHubPromotedLoopU(vector<tuple<K, K, V>>& a, vector<K>& v
 template <class G, class K, class V>
 inline void predictLinksHubPromotedLoopOmpU(vector<vector<tuple<K, K, V>>*>& as, vector<vector<K>*>& vedgs, vector<vector<K>*>& veout, const G& x, V SMIN) {
   size_t S = x.span();
+  printf("predictLinksHubPromotedLoopOmpU(): entry\n");
   #pragma omp parallel for schedule(dynamic, 2048)
   for (K u=0; u<S; ++u) {
     if (!x.hasVertex(u)) continue;
     int t = omp_get_thread_num();
+    if (u % 2048==0) printf("predictLinksHubPromotedLoopOmpU(): t=%d, u=%zu, as[t]=%zu\n", t, size_t(u), (*as[t]).size());
     // Get second order edges, with link count.
     auto ft = [&](auto v) { return v>u; };
     predictClearScanW(*vedgs[t], *veout[t]);
@@ -216,6 +218,7 @@ inline void predictLinksHubPromotedLoopOmpU(vector<vector<tuple<K, K, V>>*>& as,
       (*as[t]).push_back({v, u, score});
     }
   }
+  printf("predictLinksHubPromotedLoopOmpU(): done\n");
 }
 #endif
 

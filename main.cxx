@@ -92,7 +92,7 @@ void runExperiment(const G& x) {
     vector<tuple<K, K>>      deletions;
     vector<tuple<K, K, V>>&  insertions = p1.edges;
     sort(insertions.begin(), insertions.end(), fl);
-    insertions.resize(size_t(percent * insertions.size()));
+    insertions.resize(size_t(percent * x.size()));
     // Add predicted links to original graph.
     auto y = duplicate(x);
     for (const auto& [u, v, w] : insertions)
