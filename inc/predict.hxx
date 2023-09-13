@@ -12,6 +12,8 @@ using std::tuple;
 using std::vector;
 using std::move;
 using std::min;
+using std::sort;
+using std::make_heap;
 
 
 
@@ -28,6 +30,8 @@ struct PredictLinkOptions {
   int repeat;
   /** Minimum score to consider a link [0]. */
   V   minScore;
+  /** Maximum number of edges to predict [-1]. */
+  size_t maxEdges;
   #pragma endregion
 
 
@@ -36,9 +40,10 @@ struct PredictLinkOptions {
    * Define options for Link Prediction algorithm.
    * @param repeat number of times to repeat the algorithm [1]
    * @param minScore minimum score to consider a link [0]
+   * @param maxEdges maximum number of edges to predict [-1]
    */
-  PredictLinkOptions(int repeat=1, V minScore=V()) :
-  repeat(repeat), minScore(minScore) {}
+  PredictLinkOptions(int repeat=1, V minScore=V(), size_t maxEdges=size_t(-1)) :
+  repeat(repeat), minScore(minScore), maxEdges(maxEdges) {}
   #pragma endregion
 };
 
@@ -168,10 +173,11 @@ inline void predictClearScanW(vector<K>& vedgs, vector<K>& veout) {
  * @param vedgs edges linked to vertex u (output)
  * @param veout times edge u is linked to vertex u (output)
  * @param x original graph
- * @param SMIN minimum score
+ * @param SMIN minimum score to consider a link
+ * @param NMAX maximum number of edges to predict
  */
 template <class G, class K, class V>
-inline void predictLinksHubPromotedLoopU(vector<tuple<K, K, V>>& a, vector<K>& vedgs, vector<K>& veout, const G& x, V SMIN) {
+inline void predictLinksHubPromotedLoopU(vector<tuple<K, K, V>>& a, vector<K>& vedgs, vector<K>& veout, const G& x, V SMIN, size_t NMAX) {
   x.forEachVertexKey([&](auto u) {
     // Get second order edges, with link count.
     auto ft = [&](auto v) { return v>u; };
@@ -179,10 +185,24 @@ inline void predictLinksHubPromotedLoopU(vector<tuple<K, K, V>>& a, vector<K>& v
     x.forEachEdgeKey(u, [&](auto v) { predictScanEdgesU(vedgs, veout, x, v, ft); });
     // Get hub promoted score, and add to prediction list.
     for (K v : vedgs) {
-      V score = V(veout[v]) / min(x.degree(u), x.degree(v));
-      if (score < SMIN) continue;
-      a.push_back({u, v, score});
-      a.push_back({v, u, score});
+      V   score = V(veout[v]) / min(x.degree(u), x.degree(v));
+      if (score < SMIN) continue;  // Skip low scores
+      // Add to prediction list.
+      size_t A = a.size();
+      auto  fl = [](const auto& x, const auto& y) { return get<2>(x) > get<2>(y); };
+      if (A<NMAX) {
+        // We have not reached the maximum number of edges to predict, simply add.
+        a.push_back({u, v, score});
+        // Convert to max-heap, if prediction list is full.
+        if (A+1==NMAX) make_heap(a.begin(), a.end(), fl);
+      }
+      else {
+        // Use min-heap to store top NMAX edges only.
+        if (score < get<2>(a[0])) continue;
+        pop_heap(a.begin(), a.end(), fl);
+        a.push_back({u, v, score});
+        push_heap(a.begin(), a.end(), fl);
+      }
     }
   });
 }
@@ -195,10 +215,11 @@ inline void predictLinksHubPromotedLoopU(vector<tuple<K, K, V>>& a, vector<K>& v
  * @param vedgs edges linked to vertex u (output)
  * @param veout times edge u is linked to vertex u (output)
  * @param x original graph
- * @param SMIN minimum score
+ * @param SMIN minimum score to consider a link
+ * @param NMAX maximum number of edges to predict
  */
 template <class G, class K, class V>
-inline void predictLinksHubPromotedLoopOmpU(vector<vector<tuple<K, K, V>>*>& as, vector<vector<K>*>& vedgs, vector<vector<K>*>& veout, const G& x, V SMIN) {
+inline void predictLinksHubPromotedLoopOmpU(vector<vector<tuple<K, K, V>>*>& as, vector<vector<K>*>& vedgs, vector<vector<K>*>& veout, const G& x, V SMIN, size_t NMAX) {
   size_t S = x.span();
   #pragma omp parallel for schedule(dynamic, 2048)
   for (K u=0; u<S; ++u) {
@@ -210,10 +231,24 @@ inline void predictLinksHubPromotedLoopOmpU(vector<vector<tuple<K, K, V>>*>& as,
     x.forEachEdgeKey(u, [&](auto v) { predictScanEdgesU(*vedgs[t], *veout[t], x, v, ft); });
     // Get hub promoted score, and add to prediction list.
     for (K v : *vedgs[t]) {
-      V score = V((*veout[t])[v]) / min(x.degree(u), x.degree(v));
-      if (score < SMIN) continue;
-      (*as[t]).push_back({u, v, score});
-      (*as[t]).push_back({v, u, score});
+      V   score = V((*veout[t])[v]) / min(x.degree(u), x.degree(v));
+      if (score < SMIN) continue;  // Skip low scores
+      // Add to prediction list.
+      size_t A = (*as[t]).size();
+      auto  fl = [](const auto& x, const auto& y) { return get<2>(x) > get<2>(y); };
+      if (A<NMAX) {
+        // We have not reached the maximum number of edges to predict, simply add.
+        (*as[t]).push_back({u, v, score});
+        // Convert to max-heap, if prediction list is full.
+        if (A+1==NMAX) make_heap((*as[t]).begin(), (*as[t]).end(), fl);
+      }
+      else {
+        // Use min-heap to store top NMAX edges only.
+        if (score < get<2>((*as[t])[0])) continue;
+        pop_heap((*as[t]).begin(), (*as[t]).end(), fl);
+        (*as[t]).push_back({u, v, score});
+        push_heap((*as[t]).begin(), (*as[t]).end(), fl);
+      }
     }
   }
 }
@@ -226,7 +261,7 @@ inline void predictLinksHubPromotedLoopOmpU(vector<vector<tuple<K, K, V>>*>& as,
  * Predict links using hub promoted score.
  * @param x original graph
  * @param o predict link options
- * @returns predicted links (undirected)
+ * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
  */
 template <class G, class V=float>
 inline auto predictLinksHubPromoted(const G& x, const PredictLinkOptions<V>& o={}) {
@@ -236,8 +271,10 @@ inline auto predictLinksHubPromoted(const G& x, const PredictLinkOptions<V>& o={
   vector<K> vedgs, veout(S);
   float ta = measureDuration([&]() {
     a.clear();
-    predictLinksHubPromotedLoopU(a, vedgs, veout, x, o.minScore);
+    predictLinksHubPromotedLoopU(a, vedgs, veout, x, o.minScore, o.maxEdges);
   }, o.repeat);
+  auto fl = [](const auto& x, const auto& y) { return get<2>(x) > get<2>(y); };
+  sort(a.begin(), a.end(), fl);
   return PredictLinkResult<K, V>(a, ta);
 }
 
@@ -247,7 +284,7 @@ inline auto predictLinksHubPromoted(const G& x, const PredictLinkOptions<V>& o={
  * Predict links using hub promoted score.
  * @param x original graph
  * @param o predict link options
- * @returns predicted links (undirected)
+ * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
  */
 template <class G, class V=float>
 inline auto predictLinksHubPromotedOmp(const G& x, const PredictLinkOptions<V>& o={}) {
@@ -267,11 +304,15 @@ inline auto predictLinksHubPromotedOmp(const G& x, const PredictLinkOptions<V>& 
   float ta = measureDuration([&]() {
     for (int t=0; t<T; ++t)
       (*as[t]).clear();
-    predictLinksHubPromotedLoopOmpU(as, vedgs, veout, x, o.minScore);
+    predictLinksHubPromotedLoopOmpU(as, vedgs, veout, x, o.minScore, o.maxEdges);
   }, o.repeat);
   // Merge per-thread prediction lists.
   for (int t=0; t<T; ++t)
     a.insert(a.end(), (*as[t]).begin(), (*as[t]).end());
+  auto fl = [](const auto& x, const auto& y) { return get<2>(x) > get<2>(y); };
+  sort(a.begin(), a.end(), fl);
+  // Truncate to maximum number of edges.
+  if (a.size() > o.maxEdges) a.resize(o.maxEdges);
   // Free per-thread prediction lists.
   for (int t=0; t<T; ++t)
     delete as[t];

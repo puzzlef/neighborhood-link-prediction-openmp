@@ -1,7 +1,6 @@
 #include <cstdint>
 #include <cstdio>
 #include <utility>
-#include <random>
 #include <tuple>
 #include <vector>
 #include <string>
@@ -54,6 +53,58 @@ inline double getModularity(const G& x, const R& a, double M) {
 
 
 
+#pragma region EXPERIMENTAL SETUP
+/**
+ * Run a function on each batch update using link prediction, with a specified range of batch sizes.
+ * @param x original graph
+ * @param fn function to run on each batch update
+ */
+template <class G, class F>
+inline void runBatches(const G& x, F fn) {
+  using  K = typename G::key_type;
+  using  V = typename G::edge_value_type;
+  double i = BATCH_INSERTIONS_BEGIN;
+  for (int epoch=0;; ++epoch) {
+    for (int r=0; r<REPEAT_BATCH; ++r) {
+      auto y  = duplicate(x);
+      for (int sequence=0; sequence<BATCH_LENGTH; ++sequence) {
+        vector<tuple<K, K>> deletions;  // No edge deletions
+        // Predict links using hub promoted score.
+        auto pred = predictLinksHubPromotedOmp(x, {1, V(), size_t(i * x.size()/2)});
+        const auto& insertions = pred.edges;
+        // Add predicted links to original graph.
+        for (const auto& [u, v, w] : insertions) {
+          y.addEdge(u, v, V(1));
+          y.addEdge(v, u, V(1));
+        }
+        updateOmpU(y);
+        // Run function on updated graph.
+        fn(y, 0.0, deletions, i, insertions, pred, sequence, epoch);
+      }
+    }
+    if (i>=BATCH_INSERTIONS_END) break;
+    i BATCH_INSERTIONS_STEP;
+    i = min(i, double(BATCH_INSERTIONS_END));
+  }
+}
+
+
+/**
+ * Run a function on each number of threads, with a specified range of thread counts.
+ * @param fn function to run on each number of threads
+ */
+template <class F>
+inline void runThreads(F fn) {
+  for (int t=NUM_THREADS_BEGIN; t<=NUM_THREADS_END; t NUM_THREADS_STEP) {
+    omp_set_num_threads(t);
+    fn(t);
+    omp_set_num_threads(MAX_THREADS);
+  }
+}
+#pragma endregion
+
+
+
 
 #pragma region PERFORM EXPERIMENT
 /**
@@ -64,19 +115,17 @@ template <class G>
 void runExperiment(const G& x) {
   using K = typename G::key_type;
   using V = typename G::edge_value_type;
-  random_device dev;
-  default_random_engine rnd(dev());
   int repeat  = REPEAT_METHOD;
   int retries = 5;
   vector<K> *init = nullptr;
   double M = edgeWeightOmp(x)/2;
   // Follow a specific result logging format, which can be easily parsed later.
-  auto glog = [&](const auto& ans, const auto& pre, const char *technique, int numThreads, const auto& y, auto M, auto predictf) {
+  auto glog = [&](const auto& ans, const auto& pred, const char *technique, int numThreads, const auto& y, auto M, auto insertionsf) {
     printf(
-      "{+%.3e predictf, +%.3e predict, %03d threads} -> "
+      "{+%.3e batchf, %03d threads} -> "
       "{%09.1fms, %09.1fms preproc, %09.1fms predict, %04d iters, %01.9f modularity} %s\n",
-      double(predictf), double(pre.edges.size()), numThreads,
-      ans.time, ans.preprocessingTime, pre.time, ans.iterations, getModularity(y, ans, M), technique
+      double(insertionsf), numThreads,
+      ans.time, ans.preprocessingTime, pred.time, ans.iterations, getModularity(y, ans, M), technique
     );
   };
   // Get community memberships on original graph (static).
@@ -84,25 +133,16 @@ void runExperiment(const G& x) {
   auto a0 = louvainStaticOmp(x, init);
   glog(a0, p0, "louvainStaticOmpOriginal", MAX_THREADS, x, M, 0.0);
   // Predict links and obtain updated community memberships.
-  vector<float> percents {0.00001, 0.00005, 0.0001};
-  for (float percent : percents) {
-    // Predict links using hub promoted score.
-    auto p1 = predictLinksHubPromotedOmp(x, {repeat, V()});
-    auto fl = [](const tuple<K, K, V>& x, const tuple<K, K, V>& y) { return get<2>(x) > get<2>(y); };
-    vector<tuple<K, K>>      deletions;
-    vector<tuple<K, K, V>>&  insertions = p1.edges;
-    sort(insertions.begin(), insertions.end(), fl);
-    insertions.resize(size_t(percent * insertions.size()));
-    // Add predicted links to original graph.
-    auto y = duplicate(x);
-    for (const auto& [u, v, w] : insertions)
-      y.addEdge(u, v, V(1));
-    updateOmpU(y);
+  runBatches(x, [&](const auto& y, auto deletionsf, const auto& deletions, auto insertionsf, const auto& insertions, const auto& pred, int sequence, int epoch) {
     double M = edgeWeightOmp(y)/2;
-    // Update community memberships on updated graph.
-    auto a1 = rakDynamicFrontierOmp(y, deletions, insertions, &a0.membership, {repeat});
-    glog(a1, p1, "predictLinksHubPromotedOmp_louvainRakDynamicFrontierOmp", MAX_THREADS, y, M, percent);
-  }
+    runThreads([&](int numThreads) {
+      // Update community memberships on updated graph.
+      auto a1 = louvainStaticOmp(y, init, {repeat});
+      glog(a1, pred, "predictLinksHubPromotedOmp_louvainStaticOmp", numThreads, y, M, insertionsf);
+      auto b1 = rakDynamicFrontierOmp(y, deletions, insertions, &a0.membership, {repeat});
+      glog(b1, pred, "predictLinksHubPromotedOmp_louvainRakDynamicFrontierOmp", numThreads, y, M, insertionsf);
+    });
+  });
 }
 
 
