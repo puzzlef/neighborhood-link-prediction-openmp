@@ -271,7 +271,7 @@ inline auto predictLinksHubPromoted(const G& x, const PredictLinkOptions<V>& o={
   vector<K> vedgs, veout(S);
   float ta = measureDuration([&]() {
     a.clear();
-    predictLinksHubPromotedLoopU(a, vedgs, veout, x, o.minScore, o.maxEdges);
+    if (o.maxEdges > 0) predictLinksHubPromotedLoopU(a, vedgs, veout, x, o.minScore, o.maxEdges);
   }, o.repeat);
   auto fl = [](const auto& x, const auto& y) { return get<2>(x) > get<2>(y); };
   sort(a.begin(), a.end(), fl);
@@ -304,7 +304,7 @@ inline auto predictLinksHubPromotedOmp(const G& x, const PredictLinkOptions<V>& 
   float ta = measureDuration([&]() {
     for (int t=0; t<T; ++t)
       (*as[t]).clear();
-    predictLinksHubPromotedLoopOmpU(as, vedgs, veout, x, o.minScore, o.maxEdges);
+    if (o.maxEdges > 0) predictLinksHubPromotedLoopOmpU(as, vedgs, veout, x, o.minScore, o.maxEdges);
   }, o.repeat);
   // Merge per-thread prediction lists.
   for (int t=0; t<T; ++t)
