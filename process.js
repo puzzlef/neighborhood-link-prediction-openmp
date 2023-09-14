@@ -5,7 +5,7 @@ const path = require('path');
 const ROMPTH = /^OMP_NUM_THREADS=(\d+)/;
 const RGRAPH = /^Loading graph .*\/(.*?)\.mtx \.\.\./m;
 const RORDER = /^order: (\d+) size: (\d+) (?:\[\w+\] )?\{\}/m;
-const RRESLT = /^\{-(.+?)\/\+(.+?) batchf, (.+?) threads\} -> \{(.+?)ms, (.+?)ms preproc, (.+?) iters, (.+?) modularity\} (.+)/m;
+const RRESLT = /^\{\+(.+?) batchf, (.+?) threads\} -> \{(.+?)ms, (.+?)ms preproc, (.+?) predict, (.+?) iters, (.+?) modularity\} (.+)/m;
 
 
 
@@ -60,13 +60,13 @@ function readLogLine(ln, data, state) {
     state.size  = parseFloat(size);
   }
   else if (RRESLT.test(ln)) {
-    var [, batch_deletions_fraction, batch_insertions_fraction, num_threads, time, preprocessing_time, iterations, modularity, technique] = RRESLT.exec(ln);
+    var [, batch_insertions_fraction, num_threads, time, preprocessing_time, prediction_time, iterations, modularity, technique] = RRESLT.exec(ln);
     data.get(state.graph).push(Object.assign({}, state, {
-      batch_deletions_fraction:  parseFloat(batch_deletions_fraction),
       batch_insertions_fraction: parseFloat(batch_insertions_fraction),
       num_threads: parseFloat(num_threads),
       time:        parseFloat(time),
       preprocessing_time: parseFloat(preprocessing_time),
+      prediction_time:    parseFloat(prediction_time),
       iterations:  parseFloat(iterations),
       modularity:  parseFloat(modularity),
       technique,
