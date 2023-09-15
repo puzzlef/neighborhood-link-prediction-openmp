@@ -166,9 +166,9 @@ inline void predictClearScanW(vector<K>& vedgs, vector<K>& veout) {
 
 
 
-#pragma region PREDICT LINKS HUB PROMOTED
+#pragma region PREDICT LINKS WITH INTERSECTION
 /**
- * Main loop for predicting links using hub promoted score.
+ * Main loop for predicting links with intersection-based score.
  * @tparam MINDEGREE1 degree of high degree first order neighbors to skip (if set)
  * @tparam MAXFACTOR2 maximum degree factor between source and second order neighbor to allow (if set)
  * @param a predicted links (undirected, updated)
@@ -177,9 +177,10 @@ inline void predictClearScanW(vector<K>& vedgs, vector<K>& veout) {
  * @param x original graph
  * @param SMIN minimum score to consider a link
  * @param NMAX maximum number of edges to predict
+ * @param fs score function (u, v, |N(u) ∩ N(v)|) => score, where N(u) is the set of neighbors of u
  */
-template <int MINDEGREE1=4, int MAXFACTOR2=0, class G, class K, class V>
-inline void predictLinksHubPromotedLoopU(vector<tuple<K, K, V>>& a, vector<K>& vedgs, vector<K>& veout, const G& x, V SMIN, size_t NMAX) {
+template <int MINDEGREE1=4, int MAXFACTOR2=0, class G, class K, class V, class FS>
+inline void predictLinksWithIntersectionLoopU(vector<tuple<K, K, V>>& a, vector<K>& vedgs, vector<K>& veout, const G& x, V SMIN, size_t NMAX, FS fs) {
   x.forEachVertexKey([&](auto u) {
     // Get second order edges, with link count.
     auto ft = [&](auto v) {
@@ -195,7 +196,7 @@ inline void predictLinksHubPromotedLoopU(vector<tuple<K, K, V>>& a, vector<K>& v
     });
     // Get hub promoted score, and add to prediction list.
     for (K v : vedgs) {
-      V   score = V(veout[v]) / min(x.degree(u), x.degree(v));
+      V   score = fs(u, v, veout[v]);
       if (score < SMIN) continue;  // Skip low scores
       // Add to prediction list.
       size_t A = a.size();
@@ -220,7 +221,7 @@ inline void predictLinksHubPromotedLoopU(vector<tuple<K, K, V>>& a, vector<K>& v
 
 #ifdef OPENMP
 /**
- * Main loop for predicting links using hub promoted score.
+ * Main loop for predicting links with intersection-based score.
  * @tparam MINDEGREE1 degree of high degree first order neighbors to skip (if set)
  * @tparam MAXFACTOR2 maximum degree factor between source and second order neighbor to allow (if set)
  * @param as per-thread predicted links (undirected, updated)
@@ -229,9 +230,10 @@ inline void predictLinksHubPromotedLoopU(vector<tuple<K, K, V>>& a, vector<K>& v
  * @param x original graph
  * @param SMIN minimum score to consider a link
  * @param NMAX maximum number of edges to predict
+ * @param fs score function (u, v, |N(u) ∩ N(v)|) => score, where N(u) is the set of neighbors of u
  */
-template <int MINDEGREE1=4, int MAXFACTOR2=0, class G, class K, class V>
-inline void predictLinksHubPromotedLoopOmpU(vector<vector<tuple<K, K, V>>*>& as, vector<vector<K>*>& vedgs, vector<vector<K>*>& veout, const G& x, V SMIN, size_t NMAX) {
+template <int MINDEGREE1=4, int MAXFACTOR2=0, class G, class K, class V, class FS>
+inline void predictLinksWithIntersectionLoopOmpU(vector<vector<tuple<K, K, V>>*>& as, vector<vector<K>*>& vedgs, vector<vector<K>*>& veout, const G& x, V SMIN, size_t NMAX, FS fs) {
   size_t S = x.span();
   #pragma omp parallel for schedule(dynamic, 2048)
   for (K u=0; u<S; ++u) {
@@ -251,7 +253,7 @@ inline void predictLinksHubPromotedLoopOmpU(vector<vector<tuple<K, K, V>>*>& as,
     });
     // Get hub promoted score, and add to prediction list.
     for (K v : *vedgs[t]) {
-      V   score = V((*veout[t])[v]) / min(x.degree(u), x.degree(v));
+      V   score = fs(u, v, (*veout[t])[v]);
       if (score < SMIN) continue;  // Skip low scores
       // Add to prediction list.
       size_t A = (*as[t]).size();
@@ -278,22 +280,23 @@ inline void predictLinksHubPromotedLoopOmpU(vector<vector<tuple<K, K, V>>*>& as,
 
 
 /**
- * Predict links using hub promoted score.
+ * Predict links with intersection-based score.
  * @tparam MINDEGREE1 degree of high degree first order neighbors to skip (if set)
  * @tparam MAXFACTOR2 maximum degree factor between source and second order neighbor to allow (if set)
  * @param x original graph
  * @param o predict link options
+ * @param fs score function (u, v, |N(u) ∩ N(v)|) => score, where N(u) is the set of neighbors of u
  * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
  */
-template <int MINDEGREE1=4, int MAXFACTOR2=0, class G, class V=float>
-inline auto predictLinksHubPromoted(const G& x, const PredictLinkOptions<V>& o={}) {
+template <int MINDEGREE1=4, int MAXFACTOR2=0, class G, class V, class FS>
+inline auto predictLinksWithIntersection(const G& x, const PredictLinkOptions<V>& o, FS fs) {
   using  K = typename G::key_type;
   size_t S = x.span();
   vector<tuple<K, K, V>> a;
   vector<K> vedgs, veout(S);
   float ta = measureDuration([&]() {
     a.clear();
-    if (o.maxEdges > 0) predictLinksHubPromotedLoopU<MINDEGREE1, MAXFACTOR2>(a, vedgs, veout, x, o.minScore, o.maxEdges);
+    if (o.maxEdges > 0) predictLinksWithIntersectionLoopU<MINDEGREE1, MAXFACTOR2>(a, vedgs, veout, x, o.minScore, o.maxEdges, fs);
   }, o.repeat);
   auto fl = [](const auto& x, const auto& y) { return get<2>(x) > get<2>(y); };
   sort(a.begin(), a.end(), fl);
@@ -308,10 +311,11 @@ inline auto predictLinksHubPromoted(const G& x, const PredictLinkOptions<V>& o={
  * @tparam MAXFACTOR2 maximum degree factor between source and second order neighbor to allow (if set)
  * @param x original graph
  * @param o predict link options
+ * @param fs score function (u, v, |N(u) ∩ N(v)|) => score, where N(u) is the set of neighbors of u
  * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
  */
-template <int MINDEGREE1=4, int MAXFACTOR2=0, class G, class V=float>
-inline auto predictLinksHubPromotedOmp(const G& x, const PredictLinkOptions<V>& o={}) {
+template <int MINDEGREE1=4, int MAXFACTOR2=0, class G, class V, class FS>
+inline auto predictLinksWithIntersectionOmp(const G& x, const PredictLinkOptions<V>& o, FS fs) {
   using  K = typename G::key_type;
   size_t S = x.span();
   int    T = omp_get_max_threads();
@@ -328,7 +332,7 @@ inline auto predictLinksHubPromotedOmp(const G& x, const PredictLinkOptions<V>& 
   float ta = measureDuration([&]() {
     for (int t=0; t<T; ++t)
       (*as[t]).clear();
-    if (o.maxEdges > 0) predictLinksHubPromotedLoopOmpU<MINDEGREE1, MAXFACTOR2>(as, vedgs, veout, x, o.minScore, o.maxEdges);
+    if (o.maxEdges > 0) predictLinksWithIntersectionLoopOmpU<MINDEGREE1, MAXFACTOR2>(as, vedgs, veout, x, o.minScore, o.maxEdges, fs);
   }, o.repeat);
   // Merge per-thread prediction lists.
   for (int t=0; t<T; ++t)
@@ -346,4 +350,75 @@ inline auto predictLinksHubPromotedOmp(const G& x, const PredictLinkOptions<V>& 
 }
 #endif
 #pragma endregion
+
+
+
+
+#pragma region PREDICT LINKS WITH HUB PROMOTED SCORE
+/**
+ * Predict links using Hub promoted score.
+ * @tparam MINDEGREE1 degree of high degree first order neighbors to skip (if set)
+ * @tparam MAXFACTOR2 maximum degree factor between source and second order neighbor to allow (if set)
+ * @param x original graph
+ * @param o predict link options
+ * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
+ */
+template <int MINDEGREE1=4, int MAXFACTOR2=0, class G, class V=float>
+inline auto predictLinksHubPromoted(const G& x, const PredictLinkOptions<V>& o={}) {
+  auto fs = [&](auto u, auto v, auto Nuv) { return V(Nuv) / min(x.degree(u), x.degree(v)); };
+  return predictLinksWithIntersection<MINDEGREE1, MAXFACTOR2>(x, o, fs);
+}
+
+
+#ifdef OPENMP
+/**
+ * Predict links using Hub promoted score.
+ * @tparam MINDEGREE1 degree of high degree first order neighbors to skip (if set)
+ * @tparam MAXFACTOR2 maximum degree factor between source and second order neighbor to allow (if set)
+ * @param x original graph
+ * @param o predict link options
+ * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
+ */
+template <int MINDEGREE1=4, int MAXFACTOR2=0, class G, class V=float>
+inline auto predictLinksHubPromotedOmp(const G& x, const PredictLinkOptions<V>& o={}) {
+  auto fs = [&](auto u, auto v, auto Nuv) { return V(Nuv) / min(x.degree(u), x.degree(v)); };
+  return predictLinksWithIntersectionOmp<MINDEGREE1, MAXFACTOR2>(x, o, fs);
+}
+#endif
+#pragma endregion
+
+
+
+
+#pragma region PREDICT LINKS WITH JACCARD COEFFICIENT
+/**
+ * Predict links using Jaccard's coefficient.
+ * @tparam MINDEGREE1 degree of high degree first order neighbors to skip (if set)
+ * @tparam MAXFACTOR2 maximum degree factor between source and second order neighbor to allow (if set)
+ * @param x original graph
+ * @param o predict link options
+ * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
+ */
+template <int MINDEGREE1=4, int MAXFACTOR2=0, class G, class V=float>
+inline auto predictLinksJaccardCoefficient(const G& x, const PredictLinkOptions<V>& o={}) {
+  auto fs = [&](auto u, auto v, auto Nuv) { return V(Nuv) / (x.degree(u) + x.degree(v) - Nuv); };
+  return predictLinksWithIntersection<MINDEGREE1, MAXFACTOR2>(x, o, fs);
+}
+
+
+#ifdef OPENMP
+/**
+ * Predict links using Jaccard's coefficient.
+ * @tparam MINDEGREE1 degree of high degree first order neighbors to skip (if set)
+ * @tparam MAXFACTOR2 maximum degree factor between source and second order neighbor to allow (if set)
+ * @param x original graph
+ * @param o predict link options
+ * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
+ */
+template <int MINDEGREE1=4, int MAXFACTOR2=0, class G, class V=float>
+inline auto predictLinksJaccardCoefficientOmp(const G& x, const PredictLinkOptions<V>& o={}) {
+  auto fs = [&](auto u, auto v, auto Nuv) { return V(Nuv) / (x.degree(u) + x.degree(v) - Nuv); };
+  return predictLinksWithIntersectionOmp<MINDEGREE1, MAXFACTOR2>(x, o, fs);
+}
+#endif
 #pragma endregion
