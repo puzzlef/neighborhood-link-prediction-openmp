@@ -1,6 +1,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <utility>
+#include <random>
 #include <tuple>
 #include <vector>
 #include <string>
@@ -55,35 +56,92 @@ inline double getModularity(const G& x, const R& a, double M) {
 
 #pragma region EXPERIMENTAL SETUP
 /**
+ * Get directed edge insertions.
+ * @param edges undirected edge insertions
+ * @param wd default edge weight to use (0 => use original)
+ * @param UNDIRECTED are edges undirected?
+ */
+template <class K, class V>
+inline vector<tuple<K, K, V>> directedInsertions(const vector<tuple<K, K, V>>& edges, V wd, bool UNDIRECTED=false) {
+  vector<tuple<K, K, V>> a;
+  for (const auto& [u, v, w] : edges) {
+    a.push_back({u, v, wd? wd : w});
+    if (UNDIRECTED) a.push_back({v, u, wd? wd : w});
+  }
+  return a;
+}
+
+
+/**
+ * Get directed edge insertions.
+ * @param edges undirected edges
+ * @param w edge weight to use
+ * @param UNDIRECTED are edges undirected?
+ */
+template <class K, class V>
+inline vector<tuple<K, K, V>> directedInsertions(const vector<tuple<K, K>>& edges, V w, bool UNDIRECTED=false) {
+  vector<tuple<K, K, V>> a;
+  for (const auto& [u, v] : edges) {
+    a.push_back({u, v, w});
+    if (UNDIRECTED) a.push_back({v, u, w});
+  }
+  return a;
+}
+
+
+/**
+ * Get common edges between two sets of edges.
+ * @param edges1 first set of edges
+ * @param edges2 second set of edges
+ * @returns common edges
+ */
+template <class K, class V>
+inline vector<tuple<K, K, V>> commonEdges(const vector<tuple<K, K, V>>& edges1, const vector<tuple<K, K, V>>& edges2) {
+  vector<tuple<K, K, V>> a;
+  set_intersection(edges1.begin(), edges1.end(), edges2.begin(), edges2.end(), back_inserter(a));
+  return a;
+}
+
+
+/**
+ * Obtain a graph with a specified edge insertions.
+ * @param x original graph
+ * @param insertions edge insertions
+ * @returns graph with edge insertions
+ */
+template <class G, class K, class V>
+inline auto graphWithInsertions(const G& x, const vector<tuple<K, K, V>>& insertions) {
+  auto y = duplicate(x);
+  for (const auto& [u, v, w] : insertions)
+    y.addEdge(u, v, w);
+  updateOmpU(y);
+  return y;
+}
+
+
+/**
  * Run a function on each batch update using link prediction, with a specified range of batch sizes.
  * @param x original graph
  * @param fn function to run on each batch update
  */
-template <class G, class F>
-inline void runBatches(const G& x, F fn) {
-  using  K = typename G::key_type;
-  using  V = typename G::edge_value_type;
+template <class G, class R, class F>
+inline void runBatches(const G& x, R& rnd, F fn) {
+  using  E = typename G::edge_value_type;
+  double d = BATCH_DELETIONS_BEGIN;
   double i = BATCH_INSERTIONS_BEGIN;
   for (int epoch=0;; ++epoch) {
     for (int r=0; r<REPEAT_BATCH; ++r) {
       auto y  = duplicate(x);
       for (int sequence=0; sequence<BATCH_LENGTH; ++sequence) {
-        vector<tuple<K, K>> deletions;  // No edge deletions
-        // Predict links using hub promoted score.
-        auto pred = predictLinksHubPromotedOmp(x, {1, V(), size_t(i * x.size()/2)});
-        const auto& insertions = pred.edges;
-        // Add predicted links to original graph.
-        for (const auto& [u, v, w] : insertions) {
-          y.addEdge(u, v, V(1));
-          y.addEdge(v, u, V(1));
-        }
-        updateOmpU(y);
-        // Run function on updated graph.
-        fn(y, 0.0, deletions, i, insertions, pred, sequence, epoch);
+        auto deletions  = removeRandomEdges(y, rnd, size_t(d * x.size()/2), 1, x.span()-1);
+        auto insertions = addRandomEdges   (y, rnd, size_t(i * x.size()/2), 1, x.span()-1, E(1));
+        fn(y, d, deletions, i, insertions, sequence, epoch);
       }
     }
-    if (i>=BATCH_INSERTIONS_END) break;
+    if (d>=BATCH_DELETIONS_END && i>=BATCH_INSERTIONS_END) break;
+    d BATCH_DELETIONS_STEP;
     i BATCH_INSERTIONS_STEP;
+    d = min(d, double(BATCH_DELETIONS_END));
     i = min(i, double(BATCH_INSERTIONS_END));
   }
 }
@@ -115,32 +173,193 @@ template <class G>
 void runExperiment(const G& x) {
   using K = typename G::key_type;
   using V = typename G::edge_value_type;
+  random_device dev;
+  default_random_engine rnd(dev());
   int repeat  = REPEAT_METHOD;
   int retries = 5;
   vector<K> *init = nullptr;
   double M = edgeWeightOmp(x)/2;
   // Follow a specific result logging format, which can be easily parsed later.
-  auto glog = [&](const auto& ans, const auto& pred, const char *technique, int numThreads, const auto& y, auto M, auto insertionsf) {
+  auto plog = [&](const auto& ans, const char *technique, int numThreads, auto deletionsf, const auto& deletions, const auto& pinsertions, const auto& pcommon) {
+    double accuracy  = double(pcommon.size()) / (deletions.size() + pinsertions.size() - pcommon.size());
+    double precision = double(pcommon.size()) / pinsertions.size();
     printf(
-      "{+%.3e batchf, %03d threads} -> "
-      "{%09.1fms, %09.1fms preproc, %09.1fms predict, %04d iters, %01.9f modularity} %s\n",
-      double(insertionsf), numThreads,
-      ans.time, ans.preprocessingTime, pred.time, ans.iterations, getModularity(y, ans, M), technique
+      "{-%.3e batchf, %03d threads} -> "
+      "{%09.1fms, %.3e accuracy, %.3e precision} %s\n",
+      double(deletionsf), numThreads,
+      ans.time, accuracy, precision, technique
+    );
+  };
+  auto clog = [&](const auto& ans, const char *technique, int numThreads, auto deletionsf, const auto& y, auto M) {
+    printf(
+      "{-%.3e batchf, %03d threads} -> "
+      "{%09.1fms, %09.1fms preproc, %04d iters, %01.9f modularity} %s\n",
+      double(deletionsf), numThreads,
+      ans.time, ans.preprocessingTime, ans.iterations, getModularity(y, ans, M), technique
     );
   };
   // Get community memberships on original graph (static).
   auto p0 = PredictLinkResult<K, V>();
   auto a0 = louvainStaticOmp(x, init);
-  glog(a0, p0, "louvainStaticOmpOriginal", MAX_THREADS, x, M, 0.0);
   // Predict links and obtain updated community memberships.
-  runBatches(x, [&](const auto& y, auto deletionsf, const auto& deletions, auto insertionsf, const auto& insertions, const auto& pred, int sequence, int epoch) {
-    double M = edgeWeightOmp(y)/2;
+  runBatches(x, rnd, [&](const auto& y, auto deletionsf, const auto& deletions, auto insertionsf, const auto& insertions, int sequence, int epoch) {
+    // Sort edge deletions from random batch update, for finding common edges.
+    vector<tuple<K, K, V>>   bdeletions = directedInsertions(deletions, V(1));
+    sort(bdeletions.begin(), bdeletions.end());
     runThreads([&](int numThreads) {
-      // Update community memberships on updated graph.
       auto a1 = louvainStaticOmp(y, init, {repeat});
-      glog(a1, pred, "predictLinksHubPromotedOmp_louvainStaticOmp", numThreads, y, M, insertionsf);
-      auto b1 = rakDynamicFrontierOmp(y, deletions, insertions, &a0.membership, {repeat});
-      glog(b1, pred, "predictLinksHubPromotedOmp_louvainRakDynamicFrontierOmp", numThreads, y, M, insertionsf);
+      {
+        // Predict links using Hub promoted score.
+        auto p1 = predictLinksHubPromotedOmp<4>(y, {repeat, bdeletions.size()});
+        vector<tuple<K, K>>    pdeletions;
+        vector<tuple<K, K, V>> pinsertions = directedInsertions(p1.edges, V(1));
+        // Sort edge insertions, and find common edges.
+        sort(pinsertions.begin(), pinsertions.end());
+        vector<tuple<K, K, V>> pcommon = commonEdges(bdeletions, pinsertions);
+        // Log results.
+        plog(p1, "predictLinksHubPromotedOmp4", numThreads, deletionsf, bdeletions, pinsertions, pcommon);
+        // Obtain updated graph.
+        auto   z = graphWithInsertions(y, pinsertions);
+        double M = edgeWeightOmp(z)/2;
+        // Update community memberships on updated graph.
+        auto a2 = louvainStaticOmp(z, init, {repeat});
+        clog(a2, "louvainStaticOmp", numThreads, deletionsf, z, M);
+        auto b2 = rakDynamicFrontierOmp(z, pdeletions, pinsertions, &a1.membership, {repeat});
+        clog(b2, "louvainRakDynamicFrontierOmp", numThreads, deletionsf, z, M);
+      }
+      {
+        // Predict links using Hub promoted score.
+        auto p1 = predictLinksHubPromotedOmp<8>(y, {repeat, bdeletions.size()});
+        vector<tuple<K, K>>    pdeletions;
+        vector<tuple<K, K, V>> pinsertions = directedInsertions(p1.edges, V(1));
+        // Sort edge insertions, and find common edges.
+        sort(pinsertions.begin(), pinsertions.end());
+        vector<tuple<K, K, V>> pcommon = commonEdges(bdeletions, pinsertions);
+        // Log results.
+        plog(p1, "predictLinksHubPromotedOmp8", numThreads, deletionsf, bdeletions, pinsertions, pcommon);
+        // Obtain updated graph.
+        auto   z = graphWithInsertions(y, pinsertions);
+        double M = edgeWeightOmp(z)/2;
+        // Update community memberships on updated graph.
+        auto a2 = louvainStaticOmp(z, init, {repeat});
+        clog(a2, "louvainStaticOmp", numThreads, deletionsf, z, M);
+        auto b2 = rakDynamicFrontierOmp(z, pdeletions, pinsertions, &a1.membership, {repeat});
+        clog(b2, "louvainRakDynamicFrontierOmp", numThreads, deletionsf, z, M);
+      }
+      {
+        // Predict links using Hub promoted score.
+        auto p1 = predictLinksHubPromotedOmp<16>(y, {repeat, bdeletions.size()});
+        vector<tuple<K, K>>    pdeletions;
+        vector<tuple<K, K, V>> pinsertions = directedInsertions(p1.edges, V(1));
+        // Sort edge insertions, and find common edges.
+        sort(pinsertions.begin(), pinsertions.end());
+        vector<tuple<K, K, V>> pcommon = commonEdges(bdeletions, pinsertions);
+        // Log results.
+        plog(p1, "predictLinksHubPromotedOmp16", numThreads, deletionsf, bdeletions, pinsertions, pcommon);
+        // Obtain updated graph.
+        auto   z = graphWithInsertions(y, pinsertions);
+        double M = edgeWeightOmp(z)/2;
+        // Update community memberships on updated graph.
+        auto a2 = louvainStaticOmp(z, init, {repeat});
+        clog(a2, "louvainStaticOmp", numThreads, deletionsf, z, M);
+        auto b2 = rakDynamicFrontierOmp(z, pdeletions, pinsertions, &a1.membership, {repeat});
+        clog(b2, "louvainRakDynamicFrontierOmp", numThreads, deletionsf, z, M);
+      }
+      {
+        // Predict links using Hub promoted score.
+        auto p1 = predictLinksHubPromotedOmp<32>(y, {repeat, bdeletions.size()});
+        vector<tuple<K, K>>    pdeletions;
+        vector<tuple<K, K, V>> pinsertions = directedInsertions(p1.edges, V(1));
+        // Sort edge insertions, and find common edges.
+        sort(pinsertions.begin(), pinsertions.end());
+        vector<tuple<K, K, V>> pcommon = commonEdges(bdeletions, pinsertions);
+        // Log results.
+        plog(p1, "predictLinksHubPromotedOmp32", numThreads, deletionsf, bdeletions, pinsertions, pcommon);
+        // Obtain updated graph.
+        auto   z = graphWithInsertions(y, pinsertions);
+        double M = edgeWeightOmp(z)/2;
+        // Update community memberships on updated graph.
+        auto a2 = louvainStaticOmp(z, init, {repeat});
+        clog(a2, "louvainStaticOmp", numThreads, deletionsf, z, M);
+        auto b2 = rakDynamicFrontierOmp(z, pdeletions, pinsertions, &a1.membership, {repeat});
+        clog(b2, "louvainRakDynamicFrontierOmp", numThreads, deletionsf, z, M);
+      }
+      {
+        // Predict links using Jaccard's coefficient.
+        auto p1 = predictLinksJaccardCoefficientOmp<4>(y, {repeat, bdeletions.size()});
+        vector<tuple<K, K>>    pdeletions;
+        vector<tuple<K, K, V>> pinsertions = directedInsertions(p1.edges, V(1));
+        // Sort edge insertions, and find common edges.
+        sort(pinsertions.begin(), pinsertions.end());
+        vector<tuple<K, K, V>> pcommon = commonEdges(bdeletions, pinsertions);
+        // Log results.
+        plog(p1, "predictLinksJaccardCoefficientOmp4", numThreads, deletionsf, bdeletions, pinsertions, pcommon);
+        // Obtain updated graph.
+        auto   z = graphWithInsertions(y, pinsertions);
+        double M = edgeWeightOmp(z)/2;
+        // Update community memberships on updated graph.
+        auto a2 = louvainStaticOmp(z, init, {repeat});
+        clog(a2, "louvainStaticOmp", numThreads, deletionsf, z, M);
+        auto b2 = rakDynamicFrontierOmp(z, pdeletions, pinsertions, &a1.membership, {repeat});
+        clog(b2, "louvainRakDynamicFrontierOmp", numThreads, deletionsf, z, M);
+      }
+      {
+        // Predict links using Jaccard's coefficient.
+        auto p1 = predictLinksJaccardCoefficientOmp<8>(y, {repeat, bdeletions.size()});
+        vector<tuple<K, K>>    pdeletions;
+        vector<tuple<K, K, V>> pinsertions = directedInsertions(p1.edges, V(1));
+        // Sort edge insertions, and find common edges.
+        sort(pinsertions.begin(), pinsertions.end());
+        vector<tuple<K, K, V>> pcommon = commonEdges(bdeletions, pinsertions);
+        // Log results.
+        plog(p1, "predictLinksJaccardCoefficientOmp8", numThreads, deletionsf, bdeletions, pinsertions, pcommon);
+        // Obtain updated graph.
+        auto   z = graphWithInsertions(y, pinsertions);
+        double M = edgeWeightOmp(z)/2;
+        // Update community memberships on updated graph.
+        auto a2 = louvainStaticOmp(z, init, {repeat});
+        clog(a2, "louvainStaticOmp", numThreads, deletionsf, z, M);
+        auto b2 = rakDynamicFrontierOmp(z, pdeletions, pinsertions, &a1.membership, {repeat});
+        clog(b2, "louvainRakDynamicFrontierOmp", numThreads, deletionsf, z, M);
+      }
+      {
+        // Predict links using Jaccard's coefficient.
+        auto p1 = predictLinksJaccardCoefficientOmp<16>(y, {repeat, bdeletions.size()});
+        vector<tuple<K, K>>    pdeletions;
+        vector<tuple<K, K, V>> pinsertions = directedInsertions(p1.edges, V(1));
+        // Sort edge insertions, and find common edges.
+        sort(pinsertions.begin(), pinsertions.end());
+        vector<tuple<K, K, V>> pcommon = commonEdges(bdeletions, pinsertions);
+        // Log results.
+        plog(p1, "predictLinksJaccardCoefficientOmp16", numThreads, deletionsf, bdeletions, pinsertions, pcommon);
+        // Obtain updated graph.
+        auto   z = graphWithInsertions(y, pinsertions);
+        double M = edgeWeightOmp(z)/2;
+        // Update community memberships on updated graph.
+        auto a2 = louvainStaticOmp(z, init, {repeat});
+        clog(a2, "louvainStaticOmp", numThreads, deletionsf, z, M);
+        auto b2 = rakDynamicFrontierOmp(z, pdeletions, pinsertions, &a1.membership, {repeat});
+        clog(b2, "louvainRakDynamicFrontierOmp", numThreads, deletionsf, z, M);
+      }
+      {
+        // Predict links using Jaccard's coefficient.
+        auto p1 = predictLinksJaccardCoefficientOmp<32>(y, {repeat, bdeletions.size()});
+        vector<tuple<K, K>>    pdeletions;
+        vector<tuple<K, K, V>> pinsertions = directedInsertions(p1.edges, V(1));
+        // Sort edge insertions, and find common edges.
+        sort(pinsertions.begin(), pinsertions.end());
+        vector<tuple<K, K, V>> pcommon = commonEdges(bdeletions, pinsertions);
+        // Log results.
+        plog(p1, "predictLinksJaccardCoefficientOmp32", numThreads, deletionsf, bdeletions, pinsertions, pcommon);
+        // Obtain updated graph.
+        auto   z = graphWithInsertions(y, pinsertions);
+        double M = edgeWeightOmp(z)/2;
+        // Update community memberships on updated graph.
+        auto a2 = louvainStaticOmp(z, init, {repeat});
+        clog(a2, "louvainStaticOmp", numThreads, deletionsf, z, M);
+        auto b2 = rakDynamicFrontierOmp(z, pdeletions, pinsertions, &a1.membership, {repeat});
+        clog(b2, "louvainRakDynamicFrontierOmp", numThreads, deletionsf, z, M);
+      }
     });
   });
 }

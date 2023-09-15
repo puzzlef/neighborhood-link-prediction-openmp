@@ -28,10 +28,10 @@ struct PredictLinkOptions {
   #pragma region DATA
   /** Number of times to repeat the algorithm [1]. */
   int repeat;
-  /** Minimum score to consider a link [0]. */
-  V   minScore;
   /** Maximum number of edges to predict [-1]. */
   size_t maxEdges;
+  /** Minimum score to consider a link [0]. */
+  V   minScore;
   #pragma endregion
 
 
@@ -39,11 +39,11 @@ struct PredictLinkOptions {
   /**
    * Define options for Link Prediction algorithm.
    * @param repeat number of times to repeat the algorithm [1]
-   * @param minScore minimum score to consider a link [0]
    * @param maxEdges maximum number of edges to predict [-1]
+   * @param minScore minimum score to consider a link [0]
    */
-  PredictLinkOptions(int repeat=1, V minScore=V(), size_t maxEdges=size_t(-1)) :
-  repeat(repeat), minScore(minScore), maxEdges(maxEdges) {}
+  PredictLinkOptions(int repeat=1, size_t maxEdges=size_t(-1), V minScore=V()) :
+  repeat(repeat), maxEdges(maxEdges), minScore(minScore) {}
   #pragma endregion
 };
 
