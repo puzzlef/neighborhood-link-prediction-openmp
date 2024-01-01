@@ -186,7 +186,7 @@ inline void predictLinksWithIntersectionLoopU(vector<tuple<K, K, V>>& a, vector<
     auto ft = [&](auto v) {
       // Skip link prediction between low degree and high degree vertices (if MAXFACTOR2 is set).
       // Such links are unlikely to be formed, based on Jaccard's coefficient or Hub promoted score.
-      return MAXFACTOR2? v>u && x.degree(v)>=x.degree(u)/MAXFACTOR2 && x.degree(v)<=MAXFACTOR2*x.degree(u) : v>u;
+      return MAXFACTOR2? v>u && x.degree(u)<=MAXFACTOR2*x.degree(u) && x.degree(v)<=MAXFACTOR2*x.degree(u) : v>u;
     };
     predictClearScanW(vedgs, veout);
     x.forEachEdgeKey(u, [&](auto v) {
@@ -243,7 +243,7 @@ inline void predictLinksWithIntersectionLoopOmpU(vector<vector<tuple<K, K, V>>*>
     auto ft = [&](auto v) {
       // Skip link prediction between low degree and high degree vertices (if MAXFACTOR2 is set).
       // Such links are unlikely to be formed, based on Jaccard's coefficient or Hub promoted score.
-      return MAXFACTOR2? v>u && x.degree(v)>=x.degree(u)/MAXFACTOR2 && x.degree(v)<=MAXFACTOR2*x.degree(u) : v>u;
+      return MAXFACTOR2? v>u && x.degree(u)<=MAXFACTOR2*x.degree(u) && x.degree(v)<=MAXFACTOR2*x.degree(u) : v>u;
     };
     predictClearScanW(*vedgs[t], *veout[t]);
     x.forEachEdgeKey(u, [&](auto v) {
