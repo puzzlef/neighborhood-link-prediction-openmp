@@ -11,6 +11,4 @@
 #include "properties.hxx"
 #include "csr.hxx"
 #include "batch.hxx"
-#include "louvain.hxx"
-#include "rak.hxx"
 #include "predict.hxx"
