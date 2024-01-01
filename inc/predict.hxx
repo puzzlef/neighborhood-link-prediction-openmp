@@ -24,9 +24,9 @@ using std::make_heap;
 #pragma region TYPES
 /**
  * Options for Link Prediction algorithm.
- * @tparam V edge weight/score type
+ * @tparam W edge weight/score type
  */
-template <class V>
+template <class W>
 struct PredictLinkOptions {
   #pragma region DATA
   /** Number of times to repeat the algorithm [1]. */
@@ -34,7 +34,7 @@ struct PredictLinkOptions {
   /** Maximum number of edges to predict [-1]. */
   size_t maxEdges;
   /** Minimum score to consider a link [0]. */
-  V   minScore;
+  W   minScore;
   #pragma endregion
 
 
@@ -45,7 +45,7 @@ struct PredictLinkOptions {
    * @param maxEdges maximum number of edges to predict [-1]
    * @param minScore minimum score to consider a link [0]
    */
-  PredictLinkOptions(int repeat=1, size_t maxEdges=size_t(-1), V minScore=V()) :
+  PredictLinkOptions(int repeat=1, size_t maxEdges=size_t(-1), W minScore=W()) :
   repeat(repeat), maxEdges(maxEdges), minScore(minScore) {}
   #pragma endregion
 };
@@ -56,13 +56,13 @@ struct PredictLinkOptions {
 /**
  * Result of Link Prediction algorithm.
  * @tparam K key type (vertex-id)
- * @tparam V edge weight/score type
+ * @tparam W edge weight/score type
  */
-template <class K, class V>
+template <class K, class W>
 struct PredictLinkResult {
   #pragma region DATA
   /** Predicted links (undirected). */
-  vector<tuple<K, K, V>> edges;
+  vector<tuple<K, K, W>> edges;
   /** Time spent in milliseconds. */
   float time;
   #pragma endregion
@@ -80,7 +80,7 @@ struct PredictLinkResult {
    * @param edges predicted links (undirected)
    * @param time time spent in milliseconds
    */
-  PredictLinkResult(vector<tuple<K, K, V>>&& edges, float time=0) :
+  PredictLinkResult(vector<tuple<K, K, W>>&& edges, float time=0) :
   edges(edges), time(time) {}
 
 
@@ -89,7 +89,7 @@ struct PredictLinkResult {
    * @param edges predicted links (undirected)
    * @param time time spent in milliseconds
    */
-  PredictLinkResult(vector<tuple<K, K, V>>& edges, float time=0) :
+  PredictLinkResult(vector<tuple<K, K, W>>& edges, float time=0) :
   edges(move(edges)), time(time) {}
   #pragma endregion
 };
@@ -183,8 +183,8 @@ inline void predictClearScanW(vector<K>& vedgs, vector<K>& veout) {
  * @param NMAX maximum number of edges to predict
  * @param fs score function (u, v, |N(u) ∩ N(v)|) => score, where N(u) is the set of neighbors of u
  */
-template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class K, class V, class FS>
-inline void predictLinksWithIntersectionLoopU(vector<tuple<K, K, V>>& a, vector<K>& vedgs, vector<K>& veout, const G& x, V SMIN, size_t NMAX, FS fs) {
+template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class K, class W, class FS>
+inline void predictLinksWithIntersectionLoopU(vector<tuple<K, K, W>>& a, vector<K>& vedgs, vector<K>& veout, const G& x, W SMIN, size_t NMAX, FS fs) {
   x.forEachVertexKey([&](auto u) {
     // Get second order edges, with link count.
     auto ft = [&](auto v) {
@@ -200,7 +200,7 @@ inline void predictLinksWithIntersectionLoopU(vector<tuple<K, K, V>>& a, vector<
     });
     // Get hub promoted score, and add to prediction list.
     for (K v : vedgs) {
-      V   score = fs(u, v, veout[v]);
+      W   score = fs(u, v, veout[v]);
       if (score < SMIN) continue;  // Skip low scores
       // Add to prediction list.
       size_t A = a.size();
@@ -243,8 +243,8 @@ inline void predictLinksWithIntersectionLoopU(vector<tuple<K, K, V>>& a, vector<
  * @param NMAX maximum number of edges to predict
  * @param fs score function (u, v, |N(u) ∩ N(v)|) => score, where N(u) is the set of neighbors of u
  */
-template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class K, class V, class FS>
-inline void predictLinksWithIntersectionLoopOmpU(vector<vector<tuple<K, K, V>>*>& as, vector<vector<K>*>& vedgs, vector<vector<K>*>& veout, const G& x, V SMIN, size_t NMAX, FS fs) {
+template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class K, class W, class FS>
+inline void predictLinksWithIntersectionLoopOmpU(vector<vector<tuple<K, K, W>>*>& as, vector<vector<K>*>& vedgs, vector<vector<K>*>& veout, const G& x, W SMIN, size_t NMAX, FS fs) {
   size_t S = x.span();
   #pragma omp parallel for schedule(dynamic, 2048)
   for (K u=0; u<S; ++u) {
@@ -264,7 +264,7 @@ inline void predictLinksWithIntersectionLoopOmpU(vector<vector<tuple<K, K, V>>*>
     });
     // Get hub promoted score, and add to prediction list.
     for (K v : *vedgs[t]) {
-      V   score = fs(u, v, (*veout[t])[v]);
+      W   score = fs(u, v, (*veout[t])[v]);
       if (score < SMIN) continue;  // Skip low scores
       // Add to prediction list.
       size_t A = (*as[t]).size();
@@ -306,11 +306,11 @@ inline void predictLinksWithIntersectionLoopOmpU(vector<vector<tuple<K, K, V>>*>
  * @param fs score function (u, v, |N(u) ∩ N(v)|) => score, where N(u) is the set of neighbors of u
  * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
  */
-template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class V, class FS>
-inline auto predictLinksWithIntersection(const G& x, const PredictLinkOptions<V>& o, FS fs) {
+template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class W, class FS>
+inline auto predictLinksWithIntersection(const G& x, const PredictLinkOptions<W>& o, FS fs) {
   using  K = typename G::key_type;
   size_t S = x.span();
-  vector<tuple<K, K, V>> a;
+  vector<tuple<K, K, W>> a;
   vector<K> vedgs, veout(S);
   float ta = measureDuration([&]() {
     a.clear();
@@ -318,7 +318,7 @@ inline auto predictLinksWithIntersection(const G& x, const PredictLinkOptions<V>
   }, o.repeat);
   auto fl = [](const auto& x, const auto& y) { return get<2>(x) > get<2>(y); };
   sort(a.begin(), a.end(), fl);
-  return PredictLinkResult<K, V>(a, ta);
+  return PredictLinkResult<K, W>(a, ta);
 }
 
 
@@ -333,16 +333,16 @@ inline auto predictLinksWithIntersection(const G& x, const PredictLinkOptions<V>
  * @param fs score function (u, v, |N(u) ∩ N(v)|) => score, where N(u) is the set of neighbors of u
  * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
  */
-template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class V, class FS>
-inline auto predictLinksWithIntersectionOmp(const G& x, const PredictLinkOptions<V>& o, FS fs) {
+template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class W, class FS>
+inline auto predictLinksWithIntersectionOmp(const G& x, const PredictLinkOptions<W>& o, FS fs) {
   using  K = typename G::key_type;
   size_t S = x.span();
   int    T = omp_get_max_threads();
   // Setup per-thread prediction lists.
-  vector<tuple<K, K, V>>  a;
-  vector<vector<tuple<K, K, V>>*> as(T);
+  vector<tuple<K, K, W>>  a;
+  vector<vector<tuple<K, K, W>>*> as(T);
   for (int t=0; t<T; ++t)
-    as[t] = new vector<tuple<K, K, V>>();
+    as[t] = new vector<tuple<K, K, W>>();
   // Setup per-thread hashtables.
   vector<vector<K>*> vedgs(T);
   vector<vector<K>*> veout(T);
@@ -365,7 +365,7 @@ inline auto predictLinksWithIntersectionOmp(const G& x, const PredictLinkOptions
     delete as[t];
   // Free per-thread hashtables.
   predictFreeHashtablesW(vedgs, veout);
-  return PredictLinkResult<K, V>(a, ta);
+  return PredictLinkResult<K, W>(a, ta);
 }
 #endif
 #pragma endregion
@@ -383,9 +383,9 @@ inline auto predictLinksWithIntersectionOmp(const G& x, const PredictLinkOptions
  * @param o predict link options
  * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
  */
-template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class V=float>
-inline auto predictLinksJaccardCoefficient(const G& x, const PredictLinkOptions<V>& o={}) {
-  auto fs = [&](auto u, auto v, auto Nuv) { return V(Nuv) / (x.degree(u) + x.degree(v) - Nuv); };
+template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class W=float>
+inline auto predictLinksJaccardCoefficient(const G& x, const PredictLinkOptions<W>& o={}) {
+  auto fs = [&](auto u, auto v, auto Nuv) { return W(Nuv) / (x.degree(u) + x.degree(v) - Nuv); };
   return predictLinksWithIntersection<MINDEGREE1, MAXFACTOR2, FORCEHEAP>(x, o, fs);
 }
 
@@ -400,9 +400,9 @@ inline auto predictLinksJaccardCoefficient(const G& x, const PredictLinkOptions<
  * @param o predict link options
  * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
  */
-template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class V=float>
-inline auto predictLinksJaccardCoefficientOmp(const G& x, const PredictLinkOptions<V>& o={}) {
-  auto fs = [&](auto u, auto v, auto Nuv) { return V(Nuv) / (x.degree(u) + x.degree(v) - Nuv); };
+template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class W=float>
+inline auto predictLinksJaccardCoefficientOmp(const G& x, const PredictLinkOptions<W>& o={}) {
+  auto fs = [&](auto u, auto v, auto Nuv) { return W(Nuv) / (x.degree(u) + x.degree(v) - Nuv); };
   return predictLinksWithIntersectionOmp<MINDEGREE1, MAXFACTOR2, FORCEHEAP>(x, o, fs);
 }
 #endif
@@ -421,9 +421,9 @@ inline auto predictLinksJaccardCoefficientOmp(const G& x, const PredictLinkOptio
  * @param o predict link options
  * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
  */
-template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class V=float>
-inline auto predictLinksSorensenIndex(const G& x, const PredictLinkOptions<V>& o={}) {
-  auto fs = [&](auto u, auto v, auto Nuv) { return V(Nuv) / (x.degree(u) + x.degree(v)); };
+template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class W=float>
+inline auto predictLinksSorensenIndex(const G& x, const PredictLinkOptions<W>& o={}) {
+  auto fs = [&](auto u, auto v, auto Nuv) { return W(Nuv) / (x.degree(u) + x.degree(v)); };
   return predictLinksWithIntersection<MINDEGREE1, MAXFACTOR2, FORCEHEAP>(x, o, fs);
 }
 
@@ -438,9 +438,9 @@ inline auto predictLinksSorensenIndex(const G& x, const PredictLinkOptions<V>& o
  * @param o predict link options
  * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
  */
-template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class V=float>
-inline auto predictLinksSorensenIndexOmp(const G& x, const PredictLinkOptions<V>& o={}) {
-  auto fs = [&](auto u, auto v, auto Nuv) { return V(Nuv) / (x.degree(u) + x.degree(v)); };
+template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class W=float>
+inline auto predictLinksSorensenIndexOmp(const G& x, const PredictLinkOptions<W>& o={}) {
+  auto fs = [&](auto u, auto v, auto Nuv) { return W(Nuv) / (x.degree(u) + x.degree(v)); };
   return predictLinksWithIntersectionOmp<MINDEGREE1, MAXFACTOR2, FORCEHEAP>(x, o, fs);
 }
 #endif
@@ -459,9 +459,9 @@ inline auto predictLinksSorensenIndexOmp(const G& x, const PredictLinkOptions<V>
  * @param o predict link options
  * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
  */
-template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class V=float>
-inline auto predictLinksSaltonCosineSimilarity(const G& x, const PredictLinkOptions<V>& o={}) {
-  auto fs = [&](auto u, auto v, auto Nuv) { return V(Nuv) / sqrt(x.degree(u) * x.degree(v)); };
+template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class W=float>
+inline auto predictLinksSaltonCosineSimilarity(const G& x, const PredictLinkOptions<W>& o={}) {
+  auto fs = [&](auto u, auto v, auto Nuv) { return W(Nuv) / sqrt(x.degree(u) * x.degree(v)); };
   return predictLinksWithIntersection<MINDEGREE1, MAXFACTOR2, FORCEHEAP>(x, o, fs);
 }
 
@@ -476,9 +476,9 @@ inline auto predictLinksSaltonCosineSimilarity(const G& x, const PredictLinkOpti
  * @param o predict link options
  * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
  */
-template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class V=float>
-inline auto predictLinksSaltonCosineSimilarityOmp(const G& x, const PredictLinkOptions<V>& o={}) {
-  auto fs = [&](auto u, auto v, auto Nuv) { return V(Nuv) / sqrt(x.degree(u) * x.degree(v)); };
+template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class W=float>
+inline auto predictLinksSaltonCosineSimilarityOmp(const G& x, const PredictLinkOptions<W>& o={}) {
+  auto fs = [&](auto u, auto v, auto Nuv) { return W(Nuv) / sqrt(x.degree(u) * x.degree(v)); };
   return predictLinksWithIntersectionOmp<MINDEGREE1, MAXFACTOR2, FORCEHEAP>(x, o, fs);
 }
 #endif
@@ -497,9 +497,9 @@ inline auto predictLinksSaltonCosineSimilarityOmp(const G& x, const PredictLinkO
  * @param o predict link options
  * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
  */
-template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class V=float>
-inline auto predictLinksHubPromoted(const G& x, const PredictLinkOptions<V>& o={}) {
-  auto fs = [&](auto u, auto v, auto Nuv) { return V(Nuv) / min(x.degree(u), x.degree(v)); };
+template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class W=float>
+inline auto predictLinksHubPromoted(const G& x, const PredictLinkOptions<W>& o={}) {
+  auto fs = [&](auto u, auto v, auto Nuv) { return W(Nuv) / min(x.degree(u), x.degree(v)); };
   return predictLinksWithIntersection<MINDEGREE1, MAXFACTOR2, FORCEHEAP>(x, o, fs);
 }
 
@@ -514,9 +514,9 @@ inline auto predictLinksHubPromoted(const G& x, const PredictLinkOptions<V>& o={
  * @param o predict link options
  * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
  */
-template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class V=float>
-inline auto predictLinksHubPromotedOmp(const G& x, const PredictLinkOptions<V>& o={}) {
-  auto fs = [&](auto u, auto v, auto Nuv) { return V(Nuv) / min(x.degree(u), x.degree(v)); };
+template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class W=float>
+inline auto predictLinksHubPromotedOmp(const G& x, const PredictLinkOptions<W>& o={}) {
+  auto fs = [&](auto u, auto v, auto Nuv) { return W(Nuv) / min(x.degree(u), x.degree(v)); };
   return predictLinksWithIntersectionOmp<MINDEGREE1, MAXFACTOR2, FORCEHEAP>(x, o, fs);
 }
 #endif
@@ -535,9 +535,9 @@ inline auto predictLinksHubPromotedOmp(const G& x, const PredictLinkOptions<V>& 
  * @param o predict link options
  * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
  */
-template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class V=float>
-inline auto predictLinksHubDepressed(const G& x, const PredictLinkOptions<V>& o={}) {
-  auto fs = [&](auto u, auto v, auto Nuv) { return V(Nuv) / max(x.degree(u), x.degree(v)); };
+template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class W=float>
+inline auto predictLinksHubDepressed(const G& x, const PredictLinkOptions<W>& o={}) {
+  auto fs = [&](auto u, auto v, auto Nuv) { return W(Nuv) / max(x.degree(u), x.degree(v)); };
   return predictLinksWithIntersection<MINDEGREE1, MAXFACTOR2, FORCEHEAP>(x, o, fs);
 }
 
@@ -552,9 +552,9 @@ inline auto predictLinksHubDepressed(const G& x, const PredictLinkOptions<V>& o=
  * @param o predict link options
  * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
  */
-template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class V=float>
-inline auto predictLinksHubDepressedOmp(const G& x, const PredictLinkOptions<V>& o={}) {
-  auto fs = [&](auto u, auto v, auto Nuv) { return V(Nuv) / max(x.degree(u), x.degree(v)); };
+template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class W=float>
+inline auto predictLinksHubDepressedOmp(const G& x, const PredictLinkOptions<W>& o={}) {
+  auto fs = [&](auto u, auto v, auto Nuv) { return W(Nuv) / max(x.degree(u), x.degree(v)); };
   return predictLinksWithIntersectionOmp<MINDEGREE1, MAXFACTOR2, FORCEHEAP>(x, o, fs);
 }
 #endif
@@ -573,9 +573,9 @@ inline auto predictLinksHubDepressedOmp(const G& x, const PredictLinkOptions<V>&
  * @param o predict link options
  * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
  */
-template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class V=float>
-inline auto predictLinksLeichtHolmeNermanScore(const G& x, const PredictLinkOptions<V>& o={}) {
-  auto fs = [&](auto u, auto v, auto Nuv) { return V(Nuv) / (x.degree(u) * x.degree(v)); };
+template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class W=float>
+inline auto predictLinksLeichtHolmeNermanScore(const G& x, const PredictLinkOptions<W>& o={}) {
+  auto fs = [&](auto u, auto v, auto Nuv) { return W(Nuv) / (x.degree(u) * x.degree(v)); };
   return predictLinksWithIntersection<MINDEGREE1, MAXFACTOR2, FORCEHEAP>(x, o, fs);
 }
 
@@ -590,9 +590,9 @@ inline auto predictLinksLeichtHolmeNermanScore(const G& x, const PredictLinkOpti
  * @param o predict link options
  * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
  */
-template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class V=float>
-inline auto predictLinksLeichtHolmeNermanScoreOmp(const G& x, const PredictLinkOptions<V>& o={}) {
-  auto fs = [&](auto u, auto v, auto Nuv) { return V(Nuv) / (x.degree(u) * x.degree(v)); };
+template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class W=float>
+inline auto predictLinksLeichtHolmeNermanScoreOmp(const G& x, const PredictLinkOptions<W>& o={}) {
+  auto fs = [&](auto u, auto v, auto Nuv) { return W(Nuv) / (x.degree(u) * x.degree(v)); };
   return predictLinksWithIntersectionOmp<MINDEGREE1, MAXFACTOR2, FORCEHEAP>(x, o, fs);
 }
 #endif
