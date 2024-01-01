@@ -1,4 +1,5 @@
 #pragma once
+#include <cmath>
 #include <utility>
 #include <tuple>
 #include <vector>
@@ -10,8 +11,10 @@
 
 using std::tuple;
 using std::vector;
+using std::sqrt;
 using std::move;
 using std::min;
+using std::max;
 using std::sort;
 using std::make_heap;
 
@@ -408,6 +411,82 @@ inline auto predictLinksJaccardCoefficientOmp(const G& x, const PredictLinkOptio
 
 
 
+#pragma region PREDICT LINKS WITH SORENSEN INDEX
+/**
+ * Predict links using Sorensen Index.
+ * @tparam MINDEGREE1 degree of high degree first order neighbors to skip (if set)
+ * @tparam MAXFACTOR2 maximum degree factor between source and second order neighbor to allow (if set)
+ * @tparam FORCEHEAP always use heap to store top edges
+ * @param x original graph
+ * @param o predict link options
+ * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
+ */
+template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class V=float>
+inline auto predictLinksSorensenIndex(const G& x, const PredictLinkOptions<V>& o={}) {
+  auto fs = [&](auto u, auto v, auto Nuv) { return V(Nuv) / (x.degree(u) + x.degree(v)); };
+  return predictLinksWithIntersection<MINDEGREE1, MAXFACTOR2, FORCEHEAP>(x, o, fs);
+}
+
+
+#ifdef OPENMP
+/**
+ * Predict links using Sorensen Index.
+ * @tparam MINDEGREE1 degree of high degree first order neighbors to skip (if set)
+ * @tparam MAXFACTOR2 maximum degree factor between source and second order neighbor to allow (if set)
+ * @tparam FORCEHEAP always use heap to store top edges
+ * @param x original graph
+ * @param o predict link options
+ * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
+ */
+template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class V=float>
+inline auto predictLinksSorensenIndexOmp(const G& x, const PredictLinkOptions<V>& o={}) {
+  auto fs = [&](auto u, auto v, auto Nuv) { return V(Nuv) / (x.degree(u) + x.degree(v)); };
+  return predictLinksWithIntersectionOmp<MINDEGREE1, MAXFACTOR2, FORCEHEAP>(x, o, fs);
+}
+#endif
+#pragma endregion
+
+
+
+
+#pragma region PREDICT LINKS WITH SALTON COSINE SIMILARITY
+/**
+ * Predict links using Salton Cosine Similarity.
+ * @tparam MINDEGREE1 degree of high degree first order neighbors to skip (if set)
+ * @tparam MAXFACTOR2 maximum degree factor between source and second order neighbor to allow (if set)
+ * @tparam FORCEHEAP always use heap to store top edges
+ * @param x original graph
+ * @param o predict link options
+ * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
+ */
+template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class V=float>
+inline auto predictLinksSaltonCosineSimilarity(const G& x, const PredictLinkOptions<V>& o={}) {
+  auto fs = [&](auto u, auto v, auto Nuv) { return V(Nuv) / sqrt(x.degree(u) * x.degree(v)); };
+  return predictLinksWithIntersection<MINDEGREE1, MAXFACTOR2, FORCEHEAP>(x, o, fs);
+}
+
+
+#ifdef OPENMP
+/**
+ * Predict links using Salton Cosine Similarity.
+ * @tparam MINDEGREE1 degree of high degree first order neighbors to skip (if set)
+ * @tparam MAXFACTOR2 maximum degree factor between source and second order neighbor to allow (if set)
+ * @tparam FORCEHEAP always use heap to store top edges
+ * @param x original graph
+ * @param o predict link options
+ * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
+ */
+template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class V=float>
+inline auto predictLinksSaltonCosineSimilarityOmp(const G& x, const PredictLinkOptions<V>& o={}) {
+  auto fs = [&](auto u, auto v, auto Nuv) { return V(Nuv) / sqrt(x.degree(u) * x.degree(v)); };
+  return predictLinksWithIntersectionOmp<MINDEGREE1, MAXFACTOR2, FORCEHEAP>(x, o, fs);
+}
+#endif
+#pragma endregion
+
+
+
+
 #pragma region PREDICT LINKS WITH HUB PROMOTED SCORE
 /**
  * Predict links using Hub promoted score.
@@ -438,6 +517,82 @@ inline auto predictLinksHubPromoted(const G& x, const PredictLinkOptions<V>& o={
 template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class V=float>
 inline auto predictLinksHubPromotedOmp(const G& x, const PredictLinkOptions<V>& o={}) {
   auto fs = [&](auto u, auto v, auto Nuv) { return V(Nuv) / min(x.degree(u), x.degree(v)); };
+  return predictLinksWithIntersectionOmp<MINDEGREE1, MAXFACTOR2, FORCEHEAP>(x, o, fs);
+}
+#endif
+#pragma endregion
+
+
+
+
+#pragma region PREDICT LINKS WITH HUB DEPRESSED SCORE
+/**
+ * Predict links using Hub depressed score.
+ * @tparam MINDEGREE1 degree of high degree first order neighbors to skip (if set)
+ * @tparam MAXFACTOR2 maximum degree factor between source and second order neighbor to allow (if set)
+ * @tparam FORCEHEAP always use heap to store top edges
+ * @param x original graph
+ * @param o predict link options
+ * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
+ */
+template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class V=float>
+inline auto predictLinksHubDepressed(const G& x, const PredictLinkOptions<V>& o={}) {
+  auto fs = [&](auto u, auto v, auto Nuv) { return V(Nuv) / max(x.degree(u), x.degree(v)); };
+  return predictLinksWithIntersection<MINDEGREE1, MAXFACTOR2, FORCEHEAP>(x, o, fs);
+}
+
+
+#ifdef OPENMP
+/**
+ * Predict links using Hub depressed score.
+ * @tparam MINDEGREE1 degree of high degree first order neighbors to skip (if set)
+ * @tparam MAXFACTOR2 maximum degree factor between source and second order neighbor to allow (if set)
+ * @tparam FORCEHEAP always use heap to store top edges
+ * @param x original graph
+ * @param o predict link options
+ * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
+ */
+template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class V=float>
+inline auto predictLinksHubDepressedOmp(const G& x, const PredictLinkOptions<V>& o={}) {
+  auto fs = [&](auto u, auto v, auto Nuv) { return V(Nuv) / max(x.degree(u), x.degree(v)); };
+  return predictLinksWithIntersectionOmp<MINDEGREE1, MAXFACTOR2, FORCEHEAP>(x, o, fs);
+}
+#endif
+#pragma endregion
+
+
+
+
+#pragma region PREDICT LINKS WITH LEICHT-HOLME-NERMAN SCORE
+/**
+ * Predict links using Leicht-Holme-Nerman score.
+ * @tparam MINDEGREE1 degree of high degree first order neighbors to skip (if set)
+ * @tparam MAXFACTOR2 maximum degree factor between source and second order neighbor to allow (if set)
+ * @tparam FORCEHEAP always use heap to store top edges
+ * @param x original graph
+ * @param o predict link options
+ * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
+ */
+template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class V=float>
+inline auto predictLinksLeichtHolmeNermanScore(const G& x, const PredictLinkOptions<V>& o={}) {
+  auto fs = [&](auto u, auto v, auto Nuv) { return V(Nuv) / (x.degree(u) * x.degree(v)); };
+  return predictLinksWithIntersection<MINDEGREE1, MAXFACTOR2, FORCEHEAP>(x, o, fs);
+}
+
+
+#ifdef OPENMP
+/**
+ * Predict links using Leicht-Holme-Nerman score.
+ * @tparam MINDEGREE1 degree of high degree first order neighbors to skip (if set)
+ * @tparam MAXFACTOR2 maximum degree factor between source and second order neighbor to allow (if set)
+ * @tparam FORCEHEAP always use heap to store top edges
+ * @param x original graph
+ * @param o predict link options
+ * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
+ */
+template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class V=float>
+inline auto predictLinksLeichtHolmeNermanScoreOmp(const G& x, const PredictLinkOptions<V>& o={}) {
+  auto fs = [&](auto u, auto v, auto Nuv) { return V(Nuv) / (x.degree(u) * x.degree(v)); };
   return predictLinksWithIntersectionOmp<MINDEGREE1, MAXFACTOR2, FORCEHEAP>(x, o, fs);
 }
 #endif
