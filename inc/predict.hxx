@@ -171,6 +171,7 @@ inline void predictClearScanW(vector<K>& vedgs, vector<K>& veout) {
  * Main loop for predicting links with intersection-based score.
  * @tparam MINDEGREE1 degree of high degree first order neighbors to skip (if set)
  * @tparam MAXFACTOR2 maximum degree factor between source and second order neighbor to allow (if set)
+ * @tparam FORCEHEAP always use heap to store top edges
  * @param a predicted links (undirected, updated)
  * @param vedgs edges linked to vertex u (output)
  * @param veout times edge u is linked to vertex u (output)
@@ -179,7 +180,7 @@ inline void predictClearScanW(vector<K>& vedgs, vector<K>& veout) {
  * @param NMAX maximum number of edges to predict
  * @param fs score function (u, v, |N(u) ∩ N(v)|) => score, where N(u) is the set of neighbors of u
  */
-template <int MINDEGREE1=4, int MAXFACTOR2=0, class G, class K, class V, class FS>
+template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class K, class V, class FS>
 inline void predictLinksWithIntersectionLoopU(vector<tuple<K, K, V>>& a, vector<K>& vedgs, vector<K>& veout, const G& x, V SMIN, size_t NMAX, FS fs) {
   x.forEachVertexKey([&](auto u) {
     // Get second order edges, with link count.
@@ -201,7 +202,13 @@ inline void predictLinksWithIntersectionLoopU(vector<tuple<K, K, V>>& a, vector<
       // Add to prediction list.
       size_t A = a.size();
       auto  fl = [](const auto& x, const auto& y) { return get<2>(x) > get<2>(y); };
-      if (A<NMAX) {
+      if (FORCEHEAP) {
+        if (A>=NMAX && score < get<2>(a[0])) continue;
+        if (A>=NMAX) pop_heap(a.begin(), a.end(), fl);
+        a.push_back({u, v, score});
+        push_heap(a.begin(), a.end(), fl);
+      }
+      else if (A<NMAX) {
         // We have not reached the maximum number of edges to predict, simply add.
         a.push_back({u, v, score});
         // Convert to max-heap, if prediction list is full.
@@ -224,6 +231,7 @@ inline void predictLinksWithIntersectionLoopU(vector<tuple<K, K, V>>& a, vector<
  * Main loop for predicting links with intersection-based score.
  * @tparam MINDEGREE1 degree of high degree first order neighbors to skip (if set)
  * @tparam MAXFACTOR2 maximum degree factor between source and second order neighbor to allow (if set)
+ * @tparam FORCEHEAP always use heap to store top edges
  * @param as per-thread predicted links (undirected, updated)
  * @param vedgs edges linked to vertex u (output)
  * @param veout times edge u is linked to vertex u (output)
@@ -232,7 +240,7 @@ inline void predictLinksWithIntersectionLoopU(vector<tuple<K, K, V>>& a, vector<
  * @param NMAX maximum number of edges to predict
  * @param fs score function (u, v, |N(u) ∩ N(v)|) => score, where N(u) is the set of neighbors of u
  */
-template <int MINDEGREE1=4, int MAXFACTOR2=0, class G, class K, class V, class FS>
+template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class K, class V, class FS>
 inline void predictLinksWithIntersectionLoopOmpU(vector<vector<tuple<K, K, V>>*>& as, vector<vector<K>*>& vedgs, vector<vector<K>*>& veout, const G& x, V SMIN, size_t NMAX, FS fs) {
   size_t S = x.span();
   #pragma omp parallel for schedule(dynamic, 2048)
@@ -258,7 +266,13 @@ inline void predictLinksWithIntersectionLoopOmpU(vector<vector<tuple<K, K, V>>*>
       // Add to prediction list.
       size_t A = (*as[t]).size();
       auto  fl = [](const auto& x, const auto& y) { return get<2>(x) > get<2>(y); };
-      if (A<NMAX) {
+      if (FORCEHEAP) {
+        if (A>=NMAX && score < get<2>((*as[t])[0])) continue;
+        if (A>=NMAX) pop_heap((*as[t]).begin(), (*as[t]).end(), fl);
+        (*as[t]).push_back({u, v, score});
+        push_heap((*as[t]).begin(), (*as[t]).end(), fl);
+      }
+      else if (A<NMAX) {
         // We have not reached the maximum number of edges to predict, simply add.
         (*as[t]).push_back({u, v, score});
         // Convert to max-heap, if prediction list is full.
@@ -283,12 +297,13 @@ inline void predictLinksWithIntersectionLoopOmpU(vector<vector<tuple<K, K, V>>*>
  * Predict links with intersection-based score.
  * @tparam MINDEGREE1 degree of high degree first order neighbors to skip (if set)
  * @tparam MAXFACTOR2 maximum degree factor between source and second order neighbor to allow (if set)
+ * @tparam FORCEHEAP always use heap to store top edges
  * @param x original graph
  * @param o predict link options
  * @param fs score function (u, v, |N(u) ∩ N(v)|) => score, where N(u) is the set of neighbors of u
  * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
  */
-template <int MINDEGREE1=4, int MAXFACTOR2=0, class G, class V, class FS>
+template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class V, class FS>
 inline auto predictLinksWithIntersection(const G& x, const PredictLinkOptions<V>& o, FS fs) {
   using  K = typename G::key_type;
   size_t S = x.span();
@@ -296,7 +311,7 @@ inline auto predictLinksWithIntersection(const G& x, const PredictLinkOptions<V>
   vector<K> vedgs, veout(S);
   float ta = measureDuration([&]() {
     a.clear();
-    if (o.maxEdges > 0) predictLinksWithIntersectionLoopU<MINDEGREE1, MAXFACTOR2>(a, vedgs, veout, x, o.minScore, o.maxEdges, fs);
+    if (o.maxEdges > 0) predictLinksWithIntersectionLoopU<MINDEGREE1, MAXFACTOR2, FORCEHEAP>(a, vedgs, veout, x, o.minScore, o.maxEdges, fs);
   }, o.repeat);
   auto fl = [](const auto& x, const auto& y) { return get<2>(x) > get<2>(y); };
   sort(a.begin(), a.end(), fl);
@@ -309,12 +324,13 @@ inline auto predictLinksWithIntersection(const G& x, const PredictLinkOptions<V>
  * Predict links using hub promoted score.
  * @tparam MINDEGREE1 degree of high degree first order neighbors to skip (if set)
  * @tparam MAXFACTOR2 maximum degree factor between source and second order neighbor to allow (if set)
+ * @tparam FORCEHEAP always use heap to store top edges
  * @param x original graph
  * @param o predict link options
  * @param fs score function (u, v, |N(u) ∩ N(v)|) => score, where N(u) is the set of neighbors of u
  * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
  */
-template <int MINDEGREE1=4, int MAXFACTOR2=0, class G, class V, class FS>
+template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class V, class FS>
 inline auto predictLinksWithIntersectionOmp(const G& x, const PredictLinkOptions<V>& o, FS fs) {
   using  K = typename G::key_type;
   size_t S = x.span();
@@ -332,7 +348,7 @@ inline auto predictLinksWithIntersectionOmp(const G& x, const PredictLinkOptions
   float ta = measureDuration([&]() {
     for (int t=0; t<T; ++t)
       (*as[t]).clear();
-    if (o.maxEdges > 0) predictLinksWithIntersectionLoopOmpU<MINDEGREE1, MAXFACTOR2>(as, vedgs, veout, x, o.minScore, o.maxEdges, fs);
+    if (o.maxEdges > 0) predictLinksWithIntersectionLoopOmpU<MINDEGREE1, MAXFACTOR2, FORCEHEAP>(as, vedgs, veout, x, o.minScore, o.maxEdges, fs);
   }, o.repeat);
   // Merge per-thread prediction lists.
   for (int t=0; t<T; ++t)
@@ -359,14 +375,15 @@ inline auto predictLinksWithIntersectionOmp(const G& x, const PredictLinkOptions
  * Predict links using Hub promoted score.
  * @tparam MINDEGREE1 degree of high degree first order neighbors to skip (if set)
  * @tparam MAXFACTOR2 maximum degree factor between source and second order neighbor to allow (if set)
+ * @tparam FORCEHEAP always use heap to store top edges
  * @param x original graph
  * @param o predict link options
  * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
  */
-template <int MINDEGREE1=4, int MAXFACTOR2=0, class G, class V=float>
+template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class V=float>
 inline auto predictLinksHubPromoted(const G& x, const PredictLinkOptions<V>& o={}) {
   auto fs = [&](auto u, auto v, auto Nuv) { return V(Nuv) / min(x.degree(u), x.degree(v)); };
-  return predictLinksWithIntersection<MINDEGREE1, MAXFACTOR2>(x, o, fs);
+  return predictLinksWithIntersection<MINDEGREE1, MAXFACTOR2, FORCEHEAP>(x, o, fs);
 }
 
 
@@ -375,14 +392,15 @@ inline auto predictLinksHubPromoted(const G& x, const PredictLinkOptions<V>& o={
  * Predict links using Hub promoted score.
  * @tparam MINDEGREE1 degree of high degree first order neighbors to skip (if set)
  * @tparam MAXFACTOR2 maximum degree factor between source and second order neighbor to allow (if set)
+ * @tparam FORCEHEAP always use heap to store top edges
  * @param x original graph
  * @param o predict link options
  * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
  */
-template <int MINDEGREE1=4, int MAXFACTOR2=0, class G, class V=float>
+template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class V=float>
 inline auto predictLinksHubPromotedOmp(const G& x, const PredictLinkOptions<V>& o={}) {
   auto fs = [&](auto u, auto v, auto Nuv) { return V(Nuv) / min(x.degree(u), x.degree(v)); };
-  return predictLinksWithIntersectionOmp<MINDEGREE1, MAXFACTOR2>(x, o, fs);
+  return predictLinksWithIntersectionOmp<MINDEGREE1, MAXFACTOR2, FORCEHEAP>(x, o, fs);
 }
 #endif
 #pragma endregion
@@ -395,14 +413,15 @@ inline auto predictLinksHubPromotedOmp(const G& x, const PredictLinkOptions<V>& 
  * Predict links using Jaccard's coefficient.
  * @tparam MINDEGREE1 degree of high degree first order neighbors to skip (if set)
  * @tparam MAXFACTOR2 maximum degree factor between source and second order neighbor to allow (if set)
+ * @tparam FORCEHEAP always use heap to store top edges
  * @param x original graph
  * @param o predict link options
  * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
  */
-template <int MINDEGREE1=4, int MAXFACTOR2=0, class G, class V=float>
+template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class V=float>
 inline auto predictLinksJaccardCoefficient(const G& x, const PredictLinkOptions<V>& o={}) {
   auto fs = [&](auto u, auto v, auto Nuv) { return V(Nuv) / (x.degree(u) + x.degree(v) - Nuv); };
-  return predictLinksWithIntersection<MINDEGREE1, MAXFACTOR2>(x, o, fs);
+  return predictLinksWithIntersection<MINDEGREE1, MAXFACTOR2, FORCEHEAP>(x, o, fs);
 }
 
 
@@ -411,14 +430,15 @@ inline auto predictLinksJaccardCoefficient(const G& x, const PredictLinkOptions<
  * Predict links using Jaccard's coefficient.
  * @tparam MINDEGREE1 degree of high degree first order neighbors to skip (if set)
  * @tparam MAXFACTOR2 maximum degree factor between source and second order neighbor to allow (if set)
+ * @tparam FORCEHEAP always use heap to store top edges
  * @param x original graph
  * @param o predict link options
  * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
  */
-template <int MINDEGREE1=4, int MAXFACTOR2=0, class G, class V=float>
+template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class V=float>
 inline auto predictLinksJaccardCoefficientOmp(const G& x, const PredictLinkOptions<V>& o={}) {
   auto fs = [&](auto u, auto v, auto Nuv) { return V(Nuv) / (x.degree(u) + x.degree(v) - Nuv); };
-  return predictLinksWithIntersectionOmp<MINDEGREE1, MAXFACTOR2>(x, o, fs);
+  return predictLinksWithIntersectionOmp<MINDEGREE1, MAXFACTOR2, FORCEHEAP>(x, o, fs);
 }
 #endif
 #pragma endregion
