@@ -370,6 +370,44 @@ inline auto predictLinksWithIntersectionOmp(const G& x, const PredictLinkOptions
 
 
 
+#pragma region PREDICT LINKS WITH JACCARD COEFFICIENT
+/**
+ * Predict links using Jaccard's coefficient.
+ * @tparam MINDEGREE1 degree of high degree first order neighbors to skip (if set)
+ * @tparam MAXFACTOR2 maximum degree factor between source and second order neighbor to allow (if set)
+ * @tparam FORCEHEAP always use heap to store top edges
+ * @param x original graph
+ * @param o predict link options
+ * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
+ */
+template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class V=float>
+inline auto predictLinksJaccardCoefficient(const G& x, const PredictLinkOptions<V>& o={}) {
+  auto fs = [&](auto u, auto v, auto Nuv) { return V(Nuv) / (x.degree(u) + x.degree(v) - Nuv); };
+  return predictLinksWithIntersection<MINDEGREE1, MAXFACTOR2, FORCEHEAP>(x, o, fs);
+}
+
+
+#ifdef OPENMP
+/**
+ * Predict links using Jaccard's coefficient.
+ * @tparam MINDEGREE1 degree of high degree first order neighbors to skip (if set)
+ * @tparam MAXFACTOR2 maximum degree factor between source and second order neighbor to allow (if set)
+ * @tparam FORCEHEAP always use heap to store top edges
+ * @param x original graph
+ * @param o predict link options
+ * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
+ */
+template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class V=float>
+inline auto predictLinksJaccardCoefficientOmp(const G& x, const PredictLinkOptions<V>& o={}) {
+  auto fs = [&](auto u, auto v, auto Nuv) { return V(Nuv) / (x.degree(u) + x.degree(v) - Nuv); };
+  return predictLinksWithIntersectionOmp<MINDEGREE1, MAXFACTOR2, FORCEHEAP>(x, o, fs);
+}
+#endif
+#pragma endregion
+
+
+
+
 #pragma region PREDICT LINKS WITH HUB PROMOTED SCORE
 /**
  * Predict links using Hub promoted score.
@@ -404,41 +442,4 @@ inline auto predictLinksHubPromotedOmp(const G& x, const PredictLinkOptions<V>& 
 }
 #endif
 #pragma endregion
-
-
-
-
-#pragma region PREDICT LINKS WITH JACCARD COEFFICIENT
-/**
- * Predict links using Jaccard's coefficient.
- * @tparam MINDEGREE1 degree of high degree first order neighbors to skip (if set)
- * @tparam MAXFACTOR2 maximum degree factor between source and second order neighbor to allow (if set)
- * @tparam FORCEHEAP always use heap to store top edges
- * @param x original graph
- * @param o predict link options
- * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
- */
-template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class V=float>
-inline auto predictLinksJaccardCoefficient(const G& x, const PredictLinkOptions<V>& o={}) {
-  auto fs = [&](auto u, auto v, auto Nuv) { return V(Nuv) / (x.degree(u) + x.degree(v) - Nuv); };
-  return predictLinksWithIntersection<MINDEGREE1, MAXFACTOR2, FORCEHEAP>(x, o, fs);
-}
-
-
-#ifdef OPENMP
-/**
- * Predict links using Jaccard's coefficient.
- * @tparam MINDEGREE1 degree of high degree first order neighbors to skip (if set)
- * @tparam MAXFACTOR2 maximum degree factor between source and second order neighbor to allow (if set)
- * @tparam FORCEHEAP always use heap to store top edges
- * @param x original graph
- * @param o predict link options
- * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
- */
-template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class V=float>
-inline auto predictLinksJaccardCoefficientOmp(const G& x, const PredictLinkOptions<V>& o={}) {
-  auto fs = [&](auto u, auto v, auto Nuv) { return V(Nuv) / (x.degree(u) + x.degree(v) - Nuv); };
-  return predictLinksWithIntersectionOmp<MINDEGREE1, MAXFACTOR2, FORCEHEAP>(x, o, fs);
-}
-#endif
 #pragma endregion
