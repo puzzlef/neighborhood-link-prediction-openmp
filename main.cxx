@@ -111,21 +111,57 @@ void runExperiment(const G& x) {
   // Get predicted links from Original Jaccard coefficient.
   for (float insertionsf=1e-7; insertionsf<=0.1; insertionsf*=10) {
     size_t insertionsc = insertionsf * x.size();
-    auto px = predictLinksJaccardCoefficientOmp(x, {repeat, insertionsc});
-    vector<tuple<K, K, V>> insertionsx = directedInsertions(px.edges, V(1));
-    sort(insertionsx.begin(), insertionsx.end());
-    glog(px, "predictLinksJaccardCoefficientOmp", numThreads, insertionsf, insertionsx, insertionsx, insertionsx);
-    auto p0 = predictLinksJaccardCoefficientOmp<0, 0, true>(x, {repeat, insertionsc});
+    auto p0 = predictLinksJaccardCoefficientOmp<0>(x, {repeat, insertionsc});
     vector<tuple<K, K, V>>    insertions0 = directedInsertions(p0.edges, V(1));
     sort(insertions0.begin(), insertions0.end());
-    glog(p0, "predictLinksJaccardCoefficientOmpForceHeap", numThreads, insertionsf, insertions0, insertions0, insertions0);
+    glog(p0, "predictLinksJaccardCoefficientOmp", numThreads, insertionsf, insertions0, insertions0, insertions0);
     {
       // Predict links using Modified Jaccard's coefficient.
-      auto p1 = predictLinksJaccardCoefficientOmp<0, 0, false>(x, {repeat, insertions0.size()});
+      auto p1 = predictLinksJaccardCoefficientOmp<2>(x, {repeat, insertions0.size()});
       vector<tuple<K, K, V>> insertions1 = directedInsertions(p1.edges, V(1));
       sort(insertions1.begin(), insertions1.end());
       vector<tuple<K, K, V>> common1 = commonEdges(insertions0, insertions1);
-      glog(p1, "predictLinksJaccardCoefficientOmpAutoHeap", numThreads, insertionsf, insertions0, insertions1, common1);
+      glog(p1, "predictLinksJaccardCoefficientOmp2", numThreads, insertionsf, insertions0, insertions1, common1);
+    }
+    {
+      // Predict links using Modified Jaccard's coefficient.
+      auto p1 = predictLinksJaccardCoefficientOmp<4>(x, {repeat, insertions0.size()});
+      vector<tuple<K, K, V>> insertions1 = directedInsertions(p1.edges, V(1));
+      sort(insertions1.begin(), insertions1.end());
+      vector<tuple<K, K, V>> common1 = commonEdges(insertions0, insertions1);
+      glog(p1, "predictLinksJaccardCoefficientOmp4", numThreads, insertionsf, insertions0, insertions1, common1);
+    }
+    {
+      // Predict links using Modified Jaccard's coefficient.
+      auto p1 = predictLinksJaccardCoefficientOmp<8>(x, {repeat, insertions0.size()});
+      vector<tuple<K, K, V>> insertions1 = directedInsertions(p1.edges, V(1));
+      sort(insertions1.begin(), insertions1.end());
+      vector<tuple<K, K, V>> common1 = commonEdges(insertions0, insertions1);
+      glog(p1, "predictLinksJaccardCoefficientOmp8", numThreads, insertionsf, insertions0, insertions1, common1);
+    }
+    {
+      // Predict links using Modified Jaccard's coefficient.
+      auto p1 = predictLinksJaccardCoefficientOmp<16>(x, {repeat, insertions0.size()});
+      vector<tuple<K, K, V>> insertions1 = directedInsertions(p1.edges, V(1));
+      sort(insertions1.begin(), insertions1.end());
+      vector<tuple<K, K, V>> common1 = commonEdges(insertions0, insertions1);
+      glog(p1, "predictLinksJaccardCoefficientOmp16", numThreads, insertionsf, insertions0, insertions1, common1);
+    }
+    {
+      // Predict links using Modified Jaccard's coefficient.
+      auto p1 = predictLinksJaccardCoefficientOmp<32>(x, {repeat, insertions0.size()});
+      vector<tuple<K, K, V>> insertions1 = directedInsertions(p1.edges, V(1));
+      sort(insertions1.begin(), insertions1.end());
+      vector<tuple<K, K, V>> common1 = commonEdges(insertions0, insertions1);
+      glog(p1, "predictLinksJaccardCoefficientOmp32", numThreads, insertionsf, insertions0, insertions1, common1);
+    }
+    {
+      // Predict links using Modified Jaccard's coefficient.
+      auto p1 = predictLinksJaccardCoefficientOmp<64>(x, {repeat, insertions0.size()});
+      vector<tuple<K, K, V>> insertions1 = directedInsertions(p1.edges, V(1));
+      sort(insertions1.begin(), insertions1.end());
+      vector<tuple<K, K, V>> common1 = commonEdges(insertions0, insertions1);
+      glog(p1, "predictLinksJaccardCoefficientOmp64", numThreads, insertionsf, insertions0, insertions1, common1);
     }
   }
 }
