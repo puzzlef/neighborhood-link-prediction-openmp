@@ -20,7 +20,7 @@ using namespace std;
 #endif
 #ifndef MAX_THREADS
 /** Maximum number of threads to use. */
-#define MAX_THREADS 64
+#define MAX_THREADS 32
 #endif
 #ifndef REPEAT_BATCH
 /** Number of times to repeat each batch. */
@@ -28,8 +28,50 @@ using namespace std;
 #endif
 #ifndef REPEAT_METHOD
 /** Number of times to repeat each method. */
-#define REPEAT_METHOD 1
+#define REPEAT_METHOD 5
 #endif
+#pragma endregion
+
+
+
+
+#pragma region MACROS
+/**
+ * Predict links using Modified approach.
+ * @param fn prediction function
+ * @param deg mindegree1 to use
+ * @param insertionsf fraction of edges to insert
+ * @param insertions0 original insertions/predictions
+ */
+#define PREDICT_LINKS(fn, deg, insertionsf, insertions0) \
+  { \
+    auto p1 = fn<deg>(x, {repeat, insertions0.size()}); \
+    vector<tuple<K, K, V>> insertions1 = directedInsertions(p1.edges, V(1)); \
+    sort(insertions1.begin(), insertions1.end()); \
+    vector<tuple<K, K, V>> common1 = commonEdges(insertions0, insertions1); \
+    glog(p1, #fn #deg, insertionsf, insertions0, insertions1, common1); \
+  }
+
+
+/**
+ * Predict links with varying mindegree1 using Modified approach.
+ * @param fn prediction function
+ * @param insertionsf fraction of edges to insert
+ * @param insertionsc number of edges to insert
+ */
+#define PREDICT_LINKS_ALL(fn, insertionsf, insertionsc) \
+  { \
+    auto p0 = fn<0>(x, {repeat, insertionsc}); \
+    vector<tuple<K, K, V>>    insertions0 = directedInsertions(p0.edges, V(1)); \
+    sort(insertions0.begin(), insertions0.end()); \
+    glog(p0, #fn, insertionsf, insertions0, insertions0, insertions0); \
+    PREDICT_LINKS(fn, 2,  insertionsf, insertions0); \
+    PREDICT_LINKS(fn, 4,  insertionsf, insertions0); \
+    PREDICT_LINKS(fn, 8,  insertionsf, insertions0); \
+    PREDICT_LINKS(fn, 16, insertionsf, insertions0); \
+    PREDICT_LINKS(fn, 32, insertionsf, insertions0); \
+    PREDICT_LINKS(fn, 64, insertionsf, insertions0); \
+  }
 #pragma endregion
 
 
@@ -100,7 +142,7 @@ void runExperiment(const G& x) {
   int repeat     = REPEAT_METHOD;
   int numThreads = MAX_THREADS;
   // Follow a specific result logging format, which can be easily parsed later.
-  auto glog = [&](const auto& ans, const char *technique, int numThreads, double insertionsf, const auto& insertions0, const auto& insertions1, const auto& common1) {
+  auto glog = [&](const auto& ans, const char *technique, double insertionsf, const auto& insertions0, const auto& insertions1, const auto& common1) {
     double accuracy  = double(common1.size()) / (insertions0.size() + insertions1.size() - common1.size());
     double precision = double(common1.size()) / insertions1.size();
     printf(
@@ -111,22 +153,14 @@ void runExperiment(const G& x) {
   // Get predicted links from Original Jaccard coefficient.
   for (float insertionsf=1e-7; insertionsf<=0.1; insertionsf*=10) {
     size_t insertionsc = insertionsf * x.size();
-    auto px = predictLinksJaccardCoefficientOmp(x, {repeat, insertionsc});
-    vector<tuple<K, K, V>> insertionsx = directedInsertions(px.edges, V(1));
-    sort(insertionsx.begin(), insertionsx.end());
-    glog(px, "predictLinksJaccardCoefficientOmp", numThreads, insertionsf, insertionsx, insertionsx, insertionsx);
-    auto p0 = predictLinksJaccardCoefficientOmp<0, 0, true>(x, {repeat, insertionsc});
-    vector<tuple<K, K, V>>    insertions0 = directedInsertions(p0.edges, V(1));
-    sort(insertions0.begin(), insertions0.end());
-    glog(p0, "predictLinksJaccardCoefficientOmpForceHeap", numThreads, insertionsf, insertions0, insertions0, insertions0);
-    {
-      // Predict links using Modified Jaccard's coefficient.
-      auto p1 = predictLinksJaccardCoefficientOmp<0, 0, false>(x, {repeat, insertions0.size()});
-      vector<tuple<K, K, V>> insertions1 = directedInsertions(p1.edges, V(1));
-      sort(insertions1.begin(), insertions1.end());
-      vector<tuple<K, K, V>> common1 = commonEdges(insertions0, insertions1);
-      glog(p1, "predictLinksJaccardCoefficientOmpAutoHeap", numThreads, insertionsf, insertions0, insertions1, common1);
-    }
+    PREDICT_LINKS_ALL(predictLinksJaccardCoefficientOmp,      insertionsf, insertionsc);
+    PREDICT_LINKS_ALL(predictLinksSorensenIndexOmp,           insertionsf, insertionsc);
+    PREDICT_LINKS_ALL(predictLinksSaltonCosineSimilarityOmp,  insertionsf, insertionsc);
+    PREDICT_LINKS_ALL(predictLinksHubPromotedOmp,             insertionsf, insertionsc);
+    PREDICT_LINKS_ALL(predictLinksHubDepressedOmp,            insertionsf, insertionsc);
+    PREDICT_LINKS_ALL(predictLinksLeichtHolmeNermanScoreOmp,  insertionsf, insertionsc);
+    PREDICT_LINKS_ALL(predictLinksAdamicAdarCoefficientOmp,   insertionsf, insertionsc);
+    PREDICT_LINKS_ALL(predictLinksResourceAllocationScoreOmp, insertionsf, insertionsc);
   }
 }
 

@@ -13,8 +13,8 @@ fi
 
 # Fixed config
 : "${TYPE:=float}"
-: "${MAX_THREADS:=64}"
-: "${REPEAT_BATCH:=5}"
+: "${MAX_THREADS:=32}"
+: "${REPEAT_BATCH:=1}"
 : "${REPEAT_METHOD:=1}"
 # Define macros (dont forget to add here)
 DEFINES=(""
@@ -40,3 +40,6 @@ stdbuf --output=L ./a.out ~/Data/asia_osm.mtx        1 0 2>&1 | tee -a "$out"
 stdbuf --output=L ./a.out ~/Data/europe_osm.mtx      1 0 2>&1 | tee -a "$out"
 stdbuf --output=L ./a.out ~/Data/kmer_A2a.mtx        1 0 2>&1 | tee -a "$out"
 stdbuf --output=L ./a.out ~/Data/kmer_V1r.mtx        1 0 2>&1 | tee -a "$out"
+
+# Signal completion
+curl -X POST "https://maker.ifttt.com/trigger/puzzlef/with/key/${IFTTT_KEY}?value1=$src$1"

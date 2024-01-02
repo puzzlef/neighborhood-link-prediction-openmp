@@ -270,8 +270,8 @@ inline void predictLinksWithIntersectionLoopU(vector<tuple<K, K, W>>& a, vector<
  * @param fs score function (u, v, |N(u) ∩ N(v)|) => score, where N(u) is the set of neighbors of u
  * @param fu edge value update function (entry, v)
  */
-template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, bool CUSTOMVALUE=false, class G, class K, class W, class FS, class FU>
-inline void predictLinksWithIntersectionLoopOmpU(vector<vector<tuple<K, K, W>>*>& as, vector<vector<K>*>& vedgs, vector<vector<K>*>& veout, const G& x, W SMIN, size_t NMAX, FS fs, FU fu) {
+template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, bool CUSTOMVALUE=false, class G, class K, class V, class W, class FS, class FU>
+inline void predictLinksWithIntersectionLoopOmpU(vector<vector<tuple<K, K, W>>*>& as, vector<vector<K>*>& vedgs, vector<vector<V>*>& veout, const G& x, W SMIN, size_t NMAX, FS fs, FU fu) {
   size_t S = x.span();
   #pragma omp parallel for schedule(dynamic, 2048)
   for (K u=0; u<S; ++u) {
@@ -687,7 +687,7 @@ template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, cla
 inline auto predictLinksAdamicAdarCoefficient(const G& x, const PredictLinkOptions<W>& o={}) {
   auto fu = [&](auto& entry, auto v) { entry += 1.0 / log(x.degree(v)); };  // What if degree(v) == 1?
   auto fs = [&](auto u, auto v, auto Nuv) { return W(Nuv); };
-  return predictLinksWithIntersection<MINDEGREE1, MAXFACTOR2, FORCEHEAP, true>(x, o, fs, fu);
+  return predictLinksWithIntersection<MINDEGREE1, MAXFACTOR2, FORCEHEAP, true>(x, o, W(), fs, fu);
 }
 
 
@@ -705,7 +705,7 @@ template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, cla
 inline auto predictLinksAdamicAdarCoefficientOmp(const G& x, const PredictLinkOptions<W>& o={}) {
   auto fu = [&](auto& entry, auto v) { entry += 1.0 / log(x.degree(v)); };  // What if degree(v) == 1?
   auto fs = [&](auto u, auto v, auto Nuv) { return W(Nuv); };
-  return predictLinksWithIntersectionOmp<MINDEGREE1, MAXFACTOR2, FORCEHEAP, true>(x, o, fs, fu);
+  return predictLinksWithIntersectionOmp<MINDEGREE1, MAXFACTOR2, FORCEHEAP, true>(x, o, W(), fs, fu);
 }
 #endif
 #pragma endregion
@@ -727,7 +727,7 @@ template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, cla
 inline auto predictLinksResourceAllocationScore(const G& x, const PredictLinkOptions<W>& o={}) {
   auto fu = [&](auto& entry, auto v) { entry += 1.0 / x.degree(v); };
   auto fs = [&](auto u, auto v, auto Nuv) { return W(Nuv); };
-  return predictLinksWithIntersection<MINDEGREE1, MAXFACTOR2, FORCEHEAP, true>(x, o, fs, fu);
+  return predictLinksWithIntersection<MINDEGREE1, MAXFACTOR2, FORCEHEAP, true>(x, o, W(), fs, fu);
 }
 
 
@@ -745,7 +745,7 @@ template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, cla
 inline auto predictLinksResourceAllocationScoreOmp(const G& x, const PredictLinkOptions<W>& o={}) {
   auto fu = [&](auto& entry, auto v) { entry += 1.0 / x.degree(v); };
   auto fs = [&](auto u, auto v, auto Nuv) { return W(Nuv); };
-  return predictLinksWithIntersectionOmp<MINDEGREE1, MAXFACTOR2, FORCEHEAP, true>(x, o, fs, fu);
+  return predictLinksWithIntersectionOmp<MINDEGREE1, MAXFACTOR2, FORCEHEAP, true>(x, o, W(), fs, fu);
 }
 #endif
 #pragma endregion
