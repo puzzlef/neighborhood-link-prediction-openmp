@@ -97,31 +97,35 @@ template <class G>
 void runExperiment(const G& x) {
   using K = typename G::key_type;
   using V = typename G::edge_value_type;
-  int repeat  = REPEAT_METHOD;
-  int retries = 5;
+  int repeat     = REPEAT_METHOD;
+  int numThreads = MAX_THREADS;
   // Follow a specific result logging format, which can be easily parsed later.
   auto glog = [&](const auto& ans, const char *technique, int numThreads, double insertionsf, const auto& insertions0, const auto& insertions1, const auto& common1) {
     double accuracy  = double(common1.size()) / (insertions0.size() + insertions1.size() - common1.size());
     double precision = double(common1.size()) / insertions1.size();
     printf(
       "{-%.3e/+%.3e batchf, %03d threads} -> {%09.1fms, %.3e accuracy, %.3e precision} %s\n",
-      insertionsf, numThreads, ans.time, accuracy, precision, technique
+      0.0, insertionsf, numThreads, ans.time, accuracy, precision, technique
     );
   };
   // Get predicted links from Original Jaccard coefficient.
   for (float insertionsf=1e-7; insertionsf<=0.1; insertionsf*=10) {
     size_t insertionsc = insertionsf * x.size();
+    auto px = predictLinksJaccardCoefficientOmp(x, {repeat, insertionsc});
+    vector<tuple<K, K, V>> insertionsx = directedInsertions(px.edges, V(1));
+    sort(insertionsx.begin(), insertionsx.end());
+    glog(px, "predictLinksJaccardCoefficientOmp", numThreads, insertionsf, insertionsx, insertionsx, insertionsx);
     auto p0 = predictLinksJaccardCoefficientOmp<0, 0, true>(x, {repeat, insertionsc});
     vector<tuple<K, K, V>>    insertions0 = directedInsertions(p0.edges, V(1));
     sort(insertions0.begin(), insertions0.end());
-    glog(p0, "predictLinksJaccardCoefficientOmpForceHeap", insertionsf, numThreads, insertions0, insertions0, insertions0);
+    glog(p0, "predictLinksJaccardCoefficientOmpForceHeap", numThreads, insertionsf, insertions0, insertions0, insertions0);
     {
       // Predict links using Modified Jaccard's coefficient.
-      auto p1 = predictLinksJaccardCoefficientOmp<0, 0, false>(y, {repeat, insertions0.size()});
+      auto p1 = predictLinksJaccardCoefficientOmp<0, 0, false>(x, {repeat, insertions0.size()});
       vector<tuple<K, K, V>> insertions1 = directedInsertions(p1.edges, V(1));
       sort(insertions1.begin(), insertions1.end());
       vector<tuple<K, K, V>> common1 = commonEdges(insertions0, insertions1);
-      glog(p1, "predictLinksJaccardCoefficientOmpAutoHeap", insertionsf, numThreads, insertions0, insertions1, common1);
+      glog(p1, "predictLinksJaccardCoefficientOmpAutoHeap", numThreads, insertionsf, insertions0, insertions1, common1);
     }
   }
 }
@@ -145,7 +149,7 @@ int main(int argc, char **argv) {
   LOG("Loading graph %s ...\n", file);
   DiGraph<K, None, V> x;
   readMtxOmpW(x, file, weighted); LOG(""); println(x);
-  if (!symmetric) { x = symmetricizeOmp(x); LOG(""); print(x); printf(" (symmetricize)\n"); }
+  if (!symmetric) { x = symmetrizeOmp(x); LOG(""); print(x); printf(" (symmetrize)\n"); }
   runExperiment(x);
   printf("\n");
   return 0;
