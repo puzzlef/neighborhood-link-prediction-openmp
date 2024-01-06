@@ -4,6 +4,7 @@
 #include <tuple>
 #include <vector>
 #include <string>
+#include <random>
 #include <iostream>
 #include <algorithm>
 #include "inc/main.hxx"
@@ -46,8 +47,9 @@ using namespace std;
 #define PREDICT_LINKS(fn, deg, insertionsf, insertions0) \
   { \
     auto p1 = fn<deg>(x, {repeat, insertions0.size()}); \
-    vector<tuple<K, K, V>> insertions1 = directedInsertions(p1.edges, V(1)); \
+    vector<tuple<K, K, V>> insertions1 = directedInsertions(p1.edges, V(1), true); \
     sort(insertions1.begin(), insertions1.end()); \
+    unique(insertions1.begin(), insertions1.end()); \
     vector<tuple<K, K, V>> common1 = commonEdges(insertions0, insertions1); \
     glog(p1, #fn #deg, insertionsf, insertions0, insertions1, common1); \
   }
@@ -58,19 +60,21 @@ using namespace std;
  * @param fn prediction function
  * @param insertionsf fraction of edges to insert
  * @param insertionsc number of edges to insert
+ * @param insertions0 original insertions/predictions
  */
-#define PREDICT_LINKS_ALL(fn, insertionsf, insertionsc) \
+#define PREDICT_LINKS_ALL(fn, insertionsf, insertionsc, insertions0) \
   { \
-    auto p0 = fn<0>(x, {repeat, insertionsc}); \
-    vector<tuple<K, K, V>>    insertions0 = directedInsertions(p0.edges, V(1)); \
-    sort(insertions0.begin(), insertions0.end()); \
-    glog(p0, #fn, insertionsf, insertions0, insertions0, insertions0); \
-    PREDICT_LINKS(fn, 2,  insertionsf, insertions0); \
-    PREDICT_LINKS(fn, 4,  insertionsf, insertions0); \
-    PREDICT_LINKS(fn, 8,  insertionsf, insertions0); \
-    PREDICT_LINKS(fn, 16, insertionsf, insertions0); \
-    PREDICT_LINKS(fn, 32, insertionsf, insertions0); \
-    PREDICT_LINKS(fn, 64, insertionsf, insertions0); \
+    PREDICT_LINKS(fn, 0,    insertionsf, insertions0); \
+    PREDICT_LINKS(fn, 2,    insertionsf, insertions0); \
+    PREDICT_LINKS(fn, 4,    insertionsf, insertions0); \
+    PREDICT_LINKS(fn, 8,    insertionsf, insertions0); \
+    PREDICT_LINKS(fn, 16,   insertionsf, insertions0); \
+    PREDICT_LINKS(fn, 32,   insertionsf, insertions0); \
+    PREDICT_LINKS(fn, 64,   insertionsf, insertions0); \
+    PREDICT_LINKS(fn, 128,  insertionsf, insertions0); \
+    PREDICT_LINKS(fn, 256,  insertionsf, insertions0); \
+    PREDICT_LINKS(fn, 512,  insertionsf, insertions0); \
+    PREDICT_LINKS(fn, 1024, insertionsf, insertions0); \
   }
 #pragma endregion
 
@@ -125,6 +129,52 @@ inline vector<tuple<K, K, V>> commonEdges(const vector<tuple<K, K, V>>& edges1, 
   set_intersection(edges1.begin(), edges1.end(), edges2.begin(), edges2.end(), back_inserter(a));
   return a;
 }
+
+
+/**
+ * Obtain a graph with a specified edge insertions.
+ * @param x original graph
+ * @param insertions edge insertions
+ * @returns graph with edge insertions
+ */
+template <class G, class K, class V>
+inline auto graphWithInsertions(const G& x, const vector<tuple<K, K, V>>& insertions) {
+  auto y = duplicate(x);
+  for (const auto& [u, v, w] : insertions)
+    y.addEdge(u, v, w);
+  updateOmpU(y);
+  return y;
+}
+
+
+/**
+ * Run a function on each batch update using link prediction, with a specified range of batch sizes.
+ * @param x original graph
+ * @param fn function to run on each batch update
+ */
+template <class G, class R, class F>
+inline void runBatches(const G& x, R& rnd, F fn) {
+  using  E = typename G::edge_value_type;
+  double d = BATCH_DELETIONS_BEGIN;
+  double i = BATCH_INSERTIONS_BEGIN;
+  for (int epoch=0;; ++epoch) {
+    for (int r=0; r<REPEAT_BATCH; ++r) {
+      auto y  = duplicate(x);
+      for (int sequence=0; sequence<BATCH_LENGTH; ++sequence) {
+        auto deletions  = generateEdgeDeletions (rnd, y, size_t(d * x.size()/2), 1, x.span()-1, true);
+        auto insertions = generateEdgeInsertions(rnd, y, size_t(i * x.size()/2), 1, x.span()-1, true, None());
+        tidyBatchUpdateU(deletions, insertions, y);
+        applyBatchUpdateOmpU(y, deletions, insertions);
+        fn(y, d, deletions, i, insertions, sequence, epoch);
+      }
+    }
+    if (d>=BATCH_DELETIONS_END && i>=BATCH_INSERTIONS_END) break;
+    d BATCH_DELETIONS_STEP;
+    i BATCH_INSERTIONS_STEP;
+    d = min(d, double(BATCH_DELETIONS_END));
+    i = min(i, double(BATCH_INSERTIONS_END));
+  }
+}
 #pragma endregion
 
 
@@ -139,6 +189,8 @@ template <class G>
 void runExperiment(const G& x) {
   using K = typename G::key_type;
   using V = typename G::edge_value_type;
+  random_device dev;
+  default_random_engine rnd(dev());
   int repeat     = REPEAT_METHOD;
   int numThreads = MAX_THREADS;
   // Follow a specific result logging format, which can be easily parsed later.
@@ -151,17 +203,20 @@ void runExperiment(const G& x) {
     );
   };
   // Get predicted links from Original Jaccard coefficient.
-  for (float insertionsf=1e-7; insertionsf<=0.1; insertionsf*=10) {
-    size_t insertionsc = insertionsf * x.size();
-    PREDICT_LINKS_ALL(predictLinksJaccardCoefficientOmp,      insertionsf, insertionsc);
-    PREDICT_LINKS_ALL(predictLinksSorensenIndexOmp,           insertionsf, insertionsc);
-    PREDICT_LINKS_ALL(predictLinksSaltonCosineSimilarityOmp,  insertionsf, insertionsc);
-    PREDICT_LINKS_ALL(predictLinksHubPromotedOmp,             insertionsf, insertionsc);
-    PREDICT_LINKS_ALL(predictLinksHubDepressedOmp,            insertionsf, insertionsc);
-    PREDICT_LINKS_ALL(predictLinksLeichtHolmeNermanScoreOmp,  insertionsf, insertionsc);
-    PREDICT_LINKS_ALL(predictLinksAdamicAdarCoefficientOmp,   insertionsf, insertionsc);
-    PREDICT_LINKS_ALL(predictLinksResourceAllocationScoreOmp, insertionsf, insertionsc);
-  }
+  runBatches(x, rnd, [&](const auto& y, auto deletionsf, const auto& deletions, auto insertionsf, const auto& insertions, int sequence, int epoch) {
+    size_t deletionsc = deletionsf * x.size();
+    if (deletionsc < 1) return;
+    vector<tuple<K, K, V>>   deletions0 = directedInsertions(deletions, V(1));
+    sort(deletions0.begin(), deletions0.end());
+    PREDICT_LINKS_ALL(predictLinksJaccardCoefficientOmp,      deletionsf, deletionsc, deletions0);
+    PREDICT_LINKS_ALL(predictLinksSorensenIndexOmp,           deletionsf, deletionsc, deletions0);
+    PREDICT_LINKS_ALL(predictLinksSaltonCosineSimilarityOmp,  deletionsf, deletionsc, deletions0);
+    PREDICT_LINKS_ALL(predictLinksHubPromotedOmp,             deletionsf, deletionsc, deletions0);
+    PREDICT_LINKS_ALL(predictLinksHubDepressedOmp,            deletionsf, deletionsc, deletions0);
+    PREDICT_LINKS_ALL(predictLinksLeichtHolmeNermanScoreOmp,  deletionsf, deletionsc, deletions0);
+    PREDICT_LINKS_ALL(predictLinksAdamicAdarCoefficientOmp,   deletionsf, deletionsc, deletions0);
+    PREDICT_LINKS_ALL(predictLinksResourceAllocationScoreOmp, deletionsf, deletionsc, deletions0);
+  });
 }
 
 
