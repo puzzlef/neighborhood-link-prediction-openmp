@@ -46,8 +46,9 @@ using namespace std;
 #define PREDICT_LINKS(fn, deg, insertionsf, insertions0) \
   { \
     auto p1 = fn<deg>(x, {repeat, insertions0.size()}); \
-    vector<tuple<K, K, V>> insertions1 = directedInsertions(p1.edges, V(1)); \
+    vector<tuple<K, K, V>> insertions1 = directedInsertions(p1.edges, V(1), true); \
     sort(insertions1.begin(), insertions1.end()); \
+    unique(insertions1.begin(), insertions1.end()); \
     vector<tuple<K, K, V>> common1 = commonEdges(insertions0, insertions1); \
     glog(p1, #fn #deg, insertionsf, insertions0, insertions1, common1); \
   }
@@ -65,12 +66,16 @@ using namespace std;
     vector<tuple<K, K, V>>    insertions0 = directedInsertions(p0.edges, V(1)); \
     sort(insertions0.begin(), insertions0.end()); \
     glog(p0, #fn, insertionsf, insertions0, insertions0, insertions0); \
-    PREDICT_LINKS(fn, 2,  insertionsf, insertions0); \
-    PREDICT_LINKS(fn, 4,  insertionsf, insertions0); \
-    PREDICT_LINKS(fn, 8,  insertionsf, insertions0); \
-    PREDICT_LINKS(fn, 16, insertionsf, insertions0); \
-    PREDICT_LINKS(fn, 32, insertionsf, insertions0); \
-    PREDICT_LINKS(fn, 64, insertionsf, insertions0); \
+    PREDICT_LINKS(fn, 2,    insertionsf, insertions0); \
+    PREDICT_LINKS(fn, 4,    insertionsf, insertions0); \
+    PREDICT_LINKS(fn, 8,    insertionsf, insertions0); \
+    PREDICT_LINKS(fn, 16,   insertionsf, insertions0); \
+    PREDICT_LINKS(fn, 32,   insertionsf, insertions0); \
+    PREDICT_LINKS(fn, 64,   insertionsf, insertions0); \
+    PREDICT_LINKS(fn, 128,  insertionsf, insertions0); \
+    PREDICT_LINKS(fn, 256,  insertionsf, insertions0); \
+    PREDICT_LINKS(fn, 512,  insertionsf, insertions0); \
+    PREDICT_LINKS(fn, 1024, insertionsf, insertions0); \
   }
 #pragma endregion
 
@@ -153,6 +158,7 @@ void runExperiment(const G& x) {
   // Get predicted links from Original Jaccard coefficient.
   for (float insertionsf=1e-7; insertionsf<=0.1; insertionsf*=10) {
     size_t insertionsc = insertionsf * x.size();
+    if (insertionsc < 1) continue;
     PREDICT_LINKS_ALL(predictLinksJaccardCoefficientOmp,      insertionsf, insertionsc);
     PREDICT_LINKS_ALL(predictLinksSorensenIndexOmp,           insertionsf, insertionsc);
     PREDICT_LINKS_ALL(predictLinksSaltonCosineSimilarityOmp,  insertionsf, insertionsc);
