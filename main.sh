@@ -19,7 +19,7 @@ fi
 # Parameter sweep for batch (randomly generated)
 : "${BATCH_UNIT:=%}"
 : "${BATCH_LENGTH:=1}"
-: "${BATCH_DELETIONS_BEGIN:=0.0000001}"
+: "${BATCH_DELETIONS_BEGIN:=0.0001}"
 : "${BATCH_DELETIONS_END:=0.1}"
 : "${BATCH_DELETIONS_STEP:=*=10}"
 : "${BATCH_INSERTIONS_BEGIN:=0}"

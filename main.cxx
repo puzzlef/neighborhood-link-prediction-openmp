@@ -39,17 +39,19 @@ using namespace std;
 #pragma region MACROS
 /**
  * Predict links using Modified approach.
+ * @param x input graph
  * @param fn prediction function
  * @param deg mindegree1 to use
- * @param insertionsf fraction of edges to insert
+ * @param insertionsf fraction of undirected edges to insert
  * @param insertions0 original insertions/predictions
  */
-#define PREDICT_LINKS(fn, deg, insertionsf, insertions0) \
+#define PREDICT_LINKS(x, fn, deg, insertionsf, insertions0) \
   { \
-    auto p1 = fn<deg>(x, {repeat, insertions0.size()}); \
+    auto p1 = fn<deg>(x, {repeat, insertions0.size()/2}); \
     vector<tuple<K, K, V>> insertions1 = directedInsertions(p1.edges, V(1), true); \
     sort(insertions1.begin(), insertions1.end()); \
-    unique(insertions1.begin(), insertions1.end()); \
+    auto it = unique(insertions1.begin(), insertions1.end()); \
+    insertions1.resize(it - insertions1.begin()); \
     vector<tuple<K, K, V>> common1 = commonEdges(insertions0, insertions1); \
     glog(p1, #fn #deg, insertionsf, insertions0, insertions1, common1); \
   }
@@ -57,24 +59,24 @@ using namespace std;
 
 /**
  * Predict links with varying mindegree1 using Modified approach.
+ * @param x input graph
  * @param fn prediction function
- * @param insertionsf fraction of edges to insert
- * @param insertionsc number of edges to insert
+ * @param insertionsf fraction of undirected edges to insert
  * @param insertions0 original insertions/predictions
  */
-#define PREDICT_LINKS_ALL(fn, insertionsf, insertionsc, insertions0) \
+#define PREDICT_LINKS_ALL(x, fn, insertionsf, insertions0) \
   { \
-    PREDICT_LINKS(fn, 0,    insertionsf, insertions0); \
-    PREDICT_LINKS(fn, 2,    insertionsf, insertions0); \
-    PREDICT_LINKS(fn, 4,    insertionsf, insertions0); \
-    PREDICT_LINKS(fn, 8,    insertionsf, insertions0); \
-    PREDICT_LINKS(fn, 16,   insertionsf, insertions0); \
-    PREDICT_LINKS(fn, 32,   insertionsf, insertions0); \
-    PREDICT_LINKS(fn, 64,   insertionsf, insertions0); \
-    PREDICT_LINKS(fn, 128,  insertionsf, insertions0); \
-    PREDICT_LINKS(fn, 256,  insertionsf, insertions0); \
-    PREDICT_LINKS(fn, 512,  insertionsf, insertions0); \
-    PREDICT_LINKS(fn, 1024, insertionsf, insertions0); \
+    PREDICT_LINKS(x, fn, 0,    insertionsf, insertions0); \
+    PREDICT_LINKS(x, fn, 2,    insertionsf, insertions0); \
+    PREDICT_LINKS(x, fn, 4,    insertionsf, insertions0); \
+    PREDICT_LINKS(x, fn, 8,    insertionsf, insertions0); \
+    PREDICT_LINKS(x, fn, 16,   insertionsf, insertions0); \
+    PREDICT_LINKS(x, fn, 32,   insertionsf, insertions0); \
+    PREDICT_LINKS(x, fn, 64,   insertionsf, insertions0); \
+    PREDICT_LINKS(x, fn, 128,  insertionsf, insertions0); \
+    PREDICT_LINKS(x, fn, 256,  insertionsf, insertions0); \
+    PREDICT_LINKS(x, fn, 512,  insertionsf, insertions0); \
+    PREDICT_LINKS(x, fn, 1024, insertionsf, insertions0); \
   }
 #pragma endregion
 
@@ -204,18 +206,17 @@ void runExperiment(const G& x) {
   };
   // Get predicted links from Original Jaccard coefficient.
   runBatches(x, rnd, [&](const auto& y, auto deletionsf, const auto& deletions, auto insertionsf, const auto& insertions, int sequence, int epoch) {
-    size_t deletionsc = deletionsf * x.size();
-    if (deletionsc < 1) return;
+    if (deletions.empty()) return;
     vector<tuple<K, K, V>>   deletions0 = directedInsertions(deletions, V(1));
     sort(deletions0.begin(), deletions0.end());
-    PREDICT_LINKS_ALL(predictLinksJaccardCoefficientOmp,      deletionsf, deletionsc, deletions0);
-    PREDICT_LINKS_ALL(predictLinksSorensenIndexOmp,           deletionsf, deletionsc, deletions0);
-    PREDICT_LINKS_ALL(predictLinksSaltonCosineSimilarityOmp,  deletionsf, deletionsc, deletions0);
-    PREDICT_LINKS_ALL(predictLinksHubPromotedOmp,             deletionsf, deletionsc, deletions0);
-    PREDICT_LINKS_ALL(predictLinksHubDepressedOmp,            deletionsf, deletionsc, deletions0);
-    PREDICT_LINKS_ALL(predictLinksLeichtHolmeNermanScoreOmp,  deletionsf, deletionsc, deletions0);
-    PREDICT_LINKS_ALL(predictLinksAdamicAdarCoefficientOmp,   deletionsf, deletionsc, deletions0);
-    PREDICT_LINKS_ALL(predictLinksResourceAllocationScoreOmp, deletionsf, deletionsc, deletions0);
+    PREDICT_LINKS_ALL(y, predictLinksJaccardCoefficientOmp,      deletionsf, deletions0);
+    PREDICT_LINKS_ALL(y, predictLinksSorensenIndexOmp,           deletionsf, deletions0);
+    PREDICT_LINKS_ALL(y, predictLinksSaltonCosineSimilarityOmp,  deletionsf, deletions0);
+    PREDICT_LINKS_ALL(y, predictLinksHubPromotedOmp,             deletionsf, deletions0);
+    PREDICT_LINKS_ALL(y, predictLinksHubDepressedOmp,            deletionsf, deletions0);
+    PREDICT_LINKS_ALL(y, predictLinksLeichtHolmeNermanScoreOmp,  deletionsf, deletions0);
+    PREDICT_LINKS_ALL(y, predictLinksAdamicAdarCoefficientOmp,   deletionsf, deletions0);
+    PREDICT_LINKS_ALL(y, predictLinksResourceAllocationScoreOmp, deletionsf, deletions0);
   });
 }
 
