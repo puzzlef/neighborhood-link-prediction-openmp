@@ -197,11 +197,11 @@ void runExperiment(const G& x) {
   int numThreads = MAX_THREADS;
   // Follow a specific result logging format, which can be easily parsed later.
   auto glog = [&](const auto& ans, const char *technique, double insertionsf, const auto& insertions0, const auto& insertions1, const auto& common1) {
-    double accuracy  = double(common1.size()) / (insertions0.size() + insertions1.size() - common1.size());
-    double precision = double(common1.size()) / insertions1.size();
+    double precision = double(common1.size()) / max(insertions1.size(), size_t(1));
+    double recall    = double(common1.size()) / max(insertions0.size(), size_t(1));
     printf(
-      "{-%.3e/+%.3e batchf, %03d threads} -> {%09.1fms, %09.1fms scoring, %.3e accuracy, %.3e precision} %s\n",
-      0.0, insertionsf, numThreads, ans.time, ans.scoringTime, accuracy, precision, technique
+      "{-%.3e/+%.3e batchf, %03d threads} -> {%09.1fms, %09.1fms scoring, %.3e precision, %.3e recall} %s\n",
+      0.0, insertionsf, numThreads, ans.time, ans.scoringTime, precision, recall, technique
     );
   };
   // Get predicted links from Original Jaccard coefficient.
