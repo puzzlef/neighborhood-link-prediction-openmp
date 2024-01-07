@@ -413,6 +413,12 @@ inline auto predictLinksWithIntersectionOmp(const G& x, const PredictLinkOptions
     if (o.maxEdges > 0) predictLinksWithIntersectionLoopOmpU<MINDEGREE1, MAXFACTOR2, FORCEHEAP, CUSTOMVALUE>(as, vedgs, veout, x, o.minScore, o.maxEdges, fs, fu);
   }, o.repeat);
   float to = measureDuration([&]() {
+    #pragma omp parallel
+    {
+      int  t  = omp_get_thread_num();
+      auto fl = [](const auto& x, const auto& y) { return get<2>(x) > get<2>(y); };
+      sort((*as[t]).begin(), (*as[t]).end(), fl);
+    }
     // Merge per-thread prediction lists.
     for (int t=0; t<T; ++t)
       a.insert(a.end(), (*as[t]).begin(), (*as[t]).end());
