@@ -198,8 +198,8 @@ void runExperiment(const G& x) {
     double accuracy  = double(common1.size()) / (insertions0.size() + insertions1.size() - common1.size());
     double precision = double(common1.size()) / insertions1.size();
     printf(
-      "{-%.3e/+%.3e batchf, %03d threads} -> {%09.1fms, %.3e accuracy, %.3e precision} %s\n",
-      0.0, insertionsf, numThreads, ans.time, accuracy, precision, technique
+      "{-%.3e/+%.3e batchf, %03d threads} -> {%09.1fms, %09.1fms scoring, %.3e accuracy, %.3e precision} %s\n",
+      0.0, insertionsf, numThreads, ans.time, ans.scoringTime, accuracy, precision, technique
     );
   };
   // Get predicted links from Original Jaccard coefficient.

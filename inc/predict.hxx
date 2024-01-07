@@ -65,8 +65,10 @@ struct PredictLinkResult {
   #pragma region DATA
   /** Predicted links (undirected). */
   vector<tuple<K, K, W>> edges;
-  /** Time spent in milliseconds. */
+  /** Total time spent in milliseconds. */
   float time;
+  /** Time spent in milliseconds for scoring. */
+  float scoringTime;
   #pragma endregion
 
 
@@ -75,24 +77,25 @@ struct PredictLinkResult {
    * Empty Result of Link Prediction algorithm.
    */
   PredictLinkResult() :
-  edges(), time() {}
+  edges(), time(), scoringTime() {}
 
   /**
    * Result of Link Prediction algorithm.
    * @param edges predicted links (undirected)
-   * @param time time spent in milliseconds
+   * @param time total time spent in milliseconds
+   * @param scoringTime time spent in milliseconds for scoring
    */
-  PredictLinkResult(vector<tuple<K, K, W>>&& edges, float time=0) :
-  edges(edges), time(time) {}
+  PredictLinkResult(vector<tuple<K, K, W>>&& edges, float time=0, float scoringTime=0) :
+  edges(edges), time(time), scoringTime(scoringTime) {}
 
 
   /**
    * Result of Link Prediction algorithm.
    * @param edges predicted links (undirected)
-   * @param time time spent in milliseconds
+   * @param time total time spent in milliseconds
    */
-  PredictLinkResult(vector<tuple<K, K, W>>& edges, float time=0) :
-  edges(move(edges)), time(time) {}
+  PredictLinkResult(vector<tuple<K, K, W>>& edges, float time=0, float scoringTime=0) :
+  edges(move(edges)), time(time), scoringTime(scoringTime) {}
   #pragma endregion
 };
 #pragma endregion
@@ -345,13 +348,15 @@ inline auto predictLinksWithIntersection(const G& x, const PredictLinkOptions<W>
   vector<tuple<K, K, W>> a;
   vector<K> vedgs;
   vector<V> veout(S);
-  float ta = measureDuration([&]() {
+  float ts = measureDuration([&]() {
     a.clear();
     if (o.maxEdges > 0) predictLinksWithIntersectionLoopU<MINDEGREE1, MAXFACTOR2, FORCEHEAP, CUSTOMVALUE>(a, vedgs, veout, x, o.minScore, o.maxEdges, fs, fu);
   }, o.repeat);
-  auto fl = [](const auto& x, const auto& y) { return get<2>(x) > get<2>(y); };
-  sort(a.begin(), a.end(), fl);
-  return PredictLinkResult<K, W>(a, ta);
+  float to = measureDuration([&]() {
+    auto fl = [](const auto& x, const auto& y) { return get<2>(x) > get<2>(y); };
+    sort(a.begin(), a.end(), fl);
+  });
+  return PredictLinkResult<K, W>(a, ts + to, ts);
 }
 
 
@@ -402,24 +407,26 @@ inline auto predictLinksWithIntersectionOmp(const G& x, const PredictLinkOptions
   vector<vector<V>*> veout(T);
   predictAllocateHashtablesW(vedgs, veout, S);
   // Predict links in parallel.
-  float ta = measureDuration([&]() {
+  float ts = measureDuration([&]() {
     for (int t=0; t<T; ++t)
       (*as[t]).clear();
     if (o.maxEdges > 0) predictLinksWithIntersectionLoopOmpU<MINDEGREE1, MAXFACTOR2, FORCEHEAP, CUSTOMVALUE>(as, vedgs, veout, x, o.minScore, o.maxEdges, fs, fu);
   }, o.repeat);
-  // Merge per-thread prediction lists.
-  for (int t=0; t<T; ++t)
-    a.insert(a.end(), (*as[t]).begin(), (*as[t]).end());
-  auto fl = [](const auto& x, const auto& y) { return get<2>(x) > get<2>(y); };
-  sort(a.begin(), a.end(), fl);
-  // Truncate to maximum number of edges.
-  if (a.size() > o.maxEdges) a.resize(o.maxEdges);
+  float to = measureDuration([&]() {
+    // Merge per-thread prediction lists.
+    for (int t=0; t<T; ++t)
+      a.insert(a.end(), (*as[t]).begin(), (*as[t]).end());
+    auto fl = [](const auto& x, const auto& y) { return get<2>(x) > get<2>(y); };
+    sort(a.begin(), a.end(), fl);
+    // Truncate to maximum number of edges.
+    if (a.size() > o.maxEdges) a.resize(o.maxEdges);
+  });
   // Free per-thread prediction lists.
   for (int t=0; t<T; ++t)
     delete as[t];
   // Free per-thread hashtables.
   predictFreeHashtablesW(vedgs, veout);
-  return PredictLinkResult<K, W>(a, ta);
+  return PredictLinkResult<K, W>(a, ts + to, ts);
 }
 
 
