@@ -9,7 +9,7 @@ if [[ "$DOWNLOAD" != "0" ]]; then
   rm -rf $src
   git clone https://github.com/puzzlef/$src
   cd $src
-  git checkout compare-with-batch
+  git checkout approach-parallel-sort
 fi
 
 # Fixed config

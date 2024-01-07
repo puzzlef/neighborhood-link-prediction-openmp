@@ -4,6 +4,7 @@
 #include <tuple>
 #include <vector>
 #include <algorithm>
+#include <parallel/algorithm>
 #include "_main.hxx"
 #ifdef OPENMP
 #include <omp.h>
@@ -67,6 +68,8 @@ struct PredictLinkResult {
   vector<tuple<K, K, W>> edges;
   /** Time spent in milliseconds. */
   float time;
+  /** Time spent in milliseconds for scoring. */
+  float scoringTime;
   #pragma endregion
 
 
@@ -75,24 +78,26 @@ struct PredictLinkResult {
    * Empty Result of Link Prediction algorithm.
    */
   PredictLinkResult() :
-  edges(), time() {}
+  edges(), time(), scoringTime() {}
 
   /**
    * Result of Link Prediction algorithm.
    * @param edges predicted links (undirected)
    * @param time time spent in milliseconds
+   * @param scoringTime time spent in milliseconds for scoring
    */
-  PredictLinkResult(vector<tuple<K, K, W>>&& edges, float time=0) :
-  edges(edges), time(time) {}
+  PredictLinkResult(vector<tuple<K, K, W>>&& edges, float time=0, float scoringTime=0) :
+  edges(edges), time(time), scoringTime(scoringTime) {}
 
 
   /**
    * Result of Link Prediction algorithm.
    * @param edges predicted links (undirected)
    * @param time time spent in milliseconds
+   * @param scoringTime time spent in milliseconds for scoring
    */
-  PredictLinkResult(vector<tuple<K, K, W>>& edges, float time=0) :
-  edges(move(edges)), time(time) {}
+  PredictLinkResult(vector<tuple<K, K, W>>& edges, float time=0, float scoringTime=0) :
+  edges(move(edges)), time(time), scoringTime(scoringTime) {}
   #pragma endregion
 };
 #pragma endregion
@@ -387,7 +392,7 @@ inline auto predictLinksWithIntersection(const G& x, const PredictLinkOptions<W>
  * @param fu edge value update function (entry, v)
  * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
  */
-template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, bool CUSTOMVALUE=false, class G, class V, class W, class FS, class FU>
+template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, bool CUSTOMVALUE=false, bool PARALLELSORT=false, class G, class V, class W, class FS, class FU>
 inline auto predictLinksWithIntersectionOmp(const G& x, const PredictLinkOptions<W>& o, V VT, FS fs, FU fu) {
   using  K = typename G::key_type;
   size_t S = x.span();
@@ -407,19 +412,22 @@ inline auto predictLinksWithIntersectionOmp(const G& x, const PredictLinkOptions
       (*as[t]).clear();
     if (o.maxEdges > 0) predictLinksWithIntersectionLoopOmpU<MINDEGREE1, MAXFACTOR2, FORCEHEAP, CUSTOMVALUE>(as, vedgs, veout, x, o.minScore, o.maxEdges, fs, fu);
   }, o.repeat);
-  // Merge per-thread prediction lists.
-  for (int t=0; t<T; ++t)
-    a.insert(a.end(), (*as[t]).begin(), (*as[t]).end());
-  auto fl = [](const auto& x, const auto& y) { return get<2>(x) > get<2>(y); };
-  sort(a.begin(), a.end(), fl);
-  // Truncate to maximum number of edges.
-  if (a.size() > o.maxEdges) a.resize(o.maxEdges);
+  float tb = measureDuration([&]() {
+    // Merge per-thread prediction lists.
+    for (int t=0; t<T; ++t)
+      a.insert(a.end(), (*as[t]).begin(), (*as[t]).end());
+    auto fl = [](const auto& x, const auto& y) { return get<2>(x) > get<2>(y); };
+    if (PARALLELSORT) __gnu_parallel::sort(a.begin(), a.end(), fl);
+    else                              sort(a.begin(), a.end(), fl);
+    // Truncate to maximum number of edges.
+    if (a.size() > o.maxEdges) a.resize(o.maxEdges);
+  });
   // Free per-thread prediction lists.
   for (int t=0; t<T; ++t)
     delete as[t];
   // Free per-thread hashtables.
   predictFreeHashtablesW(vedgs, veout);
-  return PredictLinkResult<K, W>(a, ta);
+  return PredictLinkResult<K, W>(a, ta + tb, ta);
 }
 
 
@@ -433,11 +441,11 @@ inline auto predictLinksWithIntersectionOmp(const G& x, const PredictLinkOptions
  * @param fs score function (u, v, |N(u) ∩ N(v)|) => score, where N(u) is the set of neighbors of u
  * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
  */
-template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class W, class FS>
+template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, bool PARALLELSORT=false, class G, class W, class FS>
 inline auto predictLinksWithIntersectionOmp(const G& x, const PredictLinkOptions<W>& o, FS fs) {
   using K = typename G::key_type;
   auto fu = [](auto& entry, auto v) { ++entry; };
-  return predictLinksWithIntersectionOmp<MINDEGREE1, MAXFACTOR2, FORCEHEAP, false>(x, o, K(), fs, fu);
+  return predictLinksWithIntersectionOmp<MINDEGREE1, MAXFACTOR2, FORCEHEAP, false, PARALLELSORT>(x, o, K(), fs, fu);
 }
 #endif
 #pragma endregion
@@ -472,10 +480,10 @@ inline auto predictLinksJaccardCoefficient(const G& x, const PredictLinkOptions<
  * @param o predict link options
  * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
  */
-template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class W=float>
+template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, bool PARALLELSORT=false, class G, class W=float>
 inline auto predictLinksJaccardCoefficientOmp(const G& x, const PredictLinkOptions<W>& o={}) {
   auto fs = [&](auto u, auto v, auto Nuv) { return W(Nuv) / (x.degree(u) + x.degree(v) - Nuv); };
-  return predictLinksWithIntersectionOmp<MINDEGREE1, MAXFACTOR2, FORCEHEAP>(x, o, fs);
+  return predictLinksWithIntersectionOmp<MINDEGREE1, MAXFACTOR2, FORCEHEAP, PARALLELSORT>(x, o, fs);
 }
 #endif
 #pragma endregion

@@ -44,14 +44,15 @@ using namespace std;
  * @param insertionsf fraction of edges to insert
  * @param insertions0 original insertions/predictions
  */
-#define PREDICT_LINKS(fn, deg, insertionsf, insertions0) \
+#define PREDICT_LINKS(fn, deg, insertionsf, insertions0, parallelSort) \
   { \
-    auto p1 = fn<deg>(x, {repeat, insertions0.size()}); \
+    auto p1 = fn<deg, 0, false, parallelSort>(x, {repeat, insertions0.size()}); \
     vector<tuple<K, K, V>> insertions1 = directedInsertions(p1.edges, V(1), true); \
     sort(insertions1.begin(), insertions1.end()); \
     unique(insertions1.begin(), insertions1.end()); \
     vector<tuple<K, K, V>> common1 = commonEdges(insertions0, insertions1); \
-    glog(p1, #fn #deg, insertionsf, insertions0, insertions1, common1); \
+    if (parallelSort) glog(p1, #fn #deg "ParallelSort", insertionsf, insertions0, insertions1, common1); \
+    else              glog(p1, #fn #deg               , insertionsf, insertions0, insertions1, common1); \
   }
 
 
@@ -62,19 +63,19 @@ using namespace std;
  * @param insertionsc number of edges to insert
  * @param insertions0 original insertions/predictions
  */
-#define PREDICT_LINKS_ALL(fn, insertionsf, insertionsc, insertions0) \
+#define PREDICT_LINKS_ALL(fn, insertionsf, insertionsc, insertions0, parallelSort) \
   { \
-    PREDICT_LINKS(fn, 0,    insertionsf, insertions0); \
-    PREDICT_LINKS(fn, 2,    insertionsf, insertions0); \
-    PREDICT_LINKS(fn, 4,    insertionsf, insertions0); \
-    PREDICT_LINKS(fn, 8,    insertionsf, insertions0); \
-    PREDICT_LINKS(fn, 16,   insertionsf, insertions0); \
-    PREDICT_LINKS(fn, 32,   insertionsf, insertions0); \
-    PREDICT_LINKS(fn, 64,   insertionsf, insertions0); \
-    PREDICT_LINKS(fn, 128,  insertionsf, insertions0); \
-    PREDICT_LINKS(fn, 256,  insertionsf, insertions0); \
-    PREDICT_LINKS(fn, 512,  insertionsf, insertions0); \
-    PREDICT_LINKS(fn, 1024, insertionsf, insertions0); \
+    PREDICT_LINKS(fn, 0,    insertionsf, insertions0, parallelSort); \
+    PREDICT_LINKS(fn, 2,    insertionsf, insertions0, parallelSort); \
+    PREDICT_LINKS(fn, 4,    insertionsf, insertions0, parallelSort); \
+    PREDICT_LINKS(fn, 8,    insertionsf, insertions0, parallelSort); \
+    PREDICT_LINKS(fn, 16,   insertionsf, insertions0, parallelSort); \
+    PREDICT_LINKS(fn, 32,   insertionsf, insertions0, parallelSort); \
+    PREDICT_LINKS(fn, 64,   insertionsf, insertions0, parallelSort); \
+    PREDICT_LINKS(fn, 128,  insertionsf, insertions0, parallelSort); \
+    PREDICT_LINKS(fn, 256,  insertionsf, insertions0, parallelSort); \
+    PREDICT_LINKS(fn, 512,  insertionsf, insertions0, parallelSort); \
+    PREDICT_LINKS(fn, 1024, insertionsf, insertions0, parallelSort); \
   }
 #pragma endregion
 
@@ -208,14 +209,15 @@ void runExperiment(const G& x) {
     if (deletionsc < 1) return;
     vector<tuple<K, K, V>>   deletions0 = directedInsertions(deletions, V(1));
     sort(deletions0.begin(), deletions0.end());
-    PREDICT_LINKS_ALL(predictLinksJaccardCoefficientOmp,      deletionsf, deletionsc, deletions0);
-    PREDICT_LINKS_ALL(predictLinksSorensenIndexOmp,           deletionsf, deletionsc, deletions0);
-    PREDICT_LINKS_ALL(predictLinksSaltonCosineSimilarityOmp,  deletionsf, deletionsc, deletions0);
-    PREDICT_LINKS_ALL(predictLinksHubPromotedOmp,             deletionsf, deletionsc, deletions0);
-    PREDICT_LINKS_ALL(predictLinksHubDepressedOmp,            deletionsf, deletionsc, deletions0);
-    PREDICT_LINKS_ALL(predictLinksLeichtHolmeNermanScoreOmp,  deletionsf, deletionsc, deletions0);
-    PREDICT_LINKS_ALL(predictLinksAdamicAdarCoefficientOmp,   deletionsf, deletionsc, deletions0);
-    PREDICT_LINKS_ALL(predictLinksResourceAllocationScoreOmp, deletionsf, deletionsc, deletions0);
+    PREDICT_LINKS_ALL(predictLinksJaccardCoefficientOmp,      deletionsf, deletionsc, deletions0, false);
+    PREDICT_LINKS_ALL(predictLinksJaccardCoefficientOmp,      deletionsf, deletionsc, deletions0, true);
+    // PREDICT_LINKS_ALL(predictLinksSorensenIndexOmp,           deletionsf, deletionsc, deletions0);
+    // PREDICT_LINKS_ALL(predictLinksSaltonCosineSimilarityOmp,  deletionsf, deletionsc, deletions0);
+    // PREDICT_LINKS_ALL(predictLinksHubPromotedOmp,             deletionsf, deletionsc, deletions0);
+    // PREDICT_LINKS_ALL(predictLinksHubDepressedOmp,            deletionsf, deletionsc, deletions0);
+    // PREDICT_LINKS_ALL(predictLinksLeichtHolmeNermanScoreOmp,  deletionsf, deletionsc, deletions0);
+    // PREDICT_LINKS_ALL(predictLinksAdamicAdarCoefficientOmp,   deletionsf, deletionsc, deletions0);
+    // PREDICT_LINKS_ALL(predictLinksResourceAllocationScoreOmp, deletionsf, deletionsc, deletions0);
   });
 }
 
