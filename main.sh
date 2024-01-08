@@ -9,6 +9,7 @@ if [[ "$DOWNLOAD" != "0" ]]; then
   rm -rf $src
   git clone https://github.com/puzzlef/$src
   cd $src
+  git checkout strong-scaling
 fi
 
 # Fixed config
@@ -19,9 +20,9 @@ fi
 # Parameter sweep for batch (randomly generated)
 : "${BATCH_UNIT:=%}"
 : "${BATCH_LENGTH:=1}"
-: "${BATCH_DELETIONS_BEGIN:=0.0001}"
-: "${BATCH_DELETIONS_END:=0.1}"
-: "${BATCH_DELETIONS_STEP:=*=10}"
+: "${BATCH_DELETIONS_BEGIN:=0.01}"
+: "${BATCH_DELETIONS_END:=0.01}"
+: "${BATCH_DELETIONS_STEP:=+=10}"
 : "${BATCH_INSERTIONS_BEGIN:=0}"
 : "${BATCH_INSERTIONS_END:=0}"
 : "${BATCH_INSERTIONS_STEP:=+=10}"
@@ -43,23 +44,23 @@ DEFINES=(""
 
 # Run
 g++ ${DEFINES[*]} -std=c++17 -O3 -fopenmp main.cxx
-stdbuf --output=L ./a.out ~/Data/web-Stanford.mtx      0 0 2>&1 | tee -a "$out"
-stdbuf --output=L ./a.out ~/Data/web-BerkStan.mtx      0 0 2>&1 | tee -a "$out"
-stdbuf --output=L ./a.out ~/Data/web-Google.mtx        0 0 2>&1 | tee -a "$out"
-stdbuf --output=L ./a.out ~/Data/web-NotreDame.mtx     0 0 2>&1 | tee -a "$out"
-stdbuf --output=L ./a.out ~/Data/soc-Slashdot0811.mtx  0 0 2>&1 | tee -a "$out"
-stdbuf --output=L ./a.out ~/Data/soc-Slashdot0902.mtx  0 0 2>&1 | tee -a "$out"
-stdbuf --output=L ./a.out ~/Data/soc-Epinions1.mtx     0 0 2>&1 | tee -a "$out"
-stdbuf --output=L ./a.out ~/Data/coAuthorsDBLP.mtx     1 0 2>&1 | tee -a "$out"
-stdbuf --output=L ./a.out ~/Data/coAuthorsCiteseer.mtx 1 0 2>&1 | tee -a "$out"
-stdbuf --output=L ./a.out ~/Data/soc-LiveJournal1.mtx  0 0 2>&1 | tee -a "$out"
-stdbuf --output=L ./a.out ~/Data/coPapersCiteseer.mtx  1 0 2>&1 | tee -a "$out"
-stdbuf --output=L ./a.out ~/Data/coPapersDBLP.mtx      1 0 2>&1 | tee -a "$out"
-stdbuf --output=L ./a.out ~/Data/indochina-2004.mtx    0 0 2>&1 | tee -a "$out"
-stdbuf --output=L ./a.out ~/Data/italy_osm.mtx         1 0 2>&1 | tee -a "$out"
-stdbuf --output=L ./a.out ~/Data/great-britain_osm.mtx 1 0 2>&1 | tee -a "$out"
-stdbuf --output=L ./a.out ~/Data/germany_osm.mtx       1 0 2>&1 | tee -a "$out"
-stdbuf --output=L ./a.out ~/Data/asia_osm.mtx          1 0 2>&1 | tee -a "$out"
+stdbuf --output=L ./a.out ~/Data/web-Stanford.mtx      0 0 4 2>&1 | tee -a "$out"
+stdbuf --output=L ./a.out ~/Data/web-BerkStan.mtx      0 0 4 2>&1 | tee -a "$out"
+stdbuf --output=L ./a.out ~/Data/web-Google.mtx        0 0 4 2>&1 | tee -a "$out"
+stdbuf --output=L ./a.out ~/Data/web-NotreDame.mtx     0 0 4 2>&1 | tee -a "$out"
+stdbuf --output=L ./a.out ~/Data/soc-Slashdot0811.mtx  0 0 7 2>&1 | tee -a "$out"
+stdbuf --output=L ./a.out ~/Data/soc-Slashdot0902.mtx  0 0 7 2>&1 | tee -a "$out"
+stdbuf --output=L ./a.out ~/Data/soc-Epinions1.mtx     0 0 7 2>&1 | tee -a "$out"
+stdbuf --output=L ./a.out ~/Data/coAuthorsDBLP.mtx     1 0 4 2>&1 | tee -a "$out"
+stdbuf --output=L ./a.out ~/Data/coAuthorsCiteseer.mtx 1 0 4 2>&1 | tee -a "$out"
+stdbuf --output=L ./a.out ~/Data/soc-LiveJournal1.mtx  0 0 7 2>&1 | tee -a "$out"
+stdbuf --output=L ./a.out ~/Data/coPapersCiteseer.mtx  1 0 4 2>&1 | tee -a "$out"
+stdbuf --output=L ./a.out ~/Data/coPapersDBLP.mtx      1 0 4 2>&1 | tee -a "$out"
+stdbuf --output=L ./a.out ~/Data/indochina-2004.mtx    0 0 4 2>&1 | tee -a "$out"
+stdbuf --output=L ./a.out ~/Data/italy_osm.mtx         1 0 3 2>&1 | tee -a "$out"
+stdbuf --output=L ./a.out ~/Data/great-britain_osm.mtx 1 0 3 2>&1 | tee -a "$out"
+stdbuf --output=L ./a.out ~/Data/germany_osm.mtx       1 0 3 2>&1 | tee -a "$out"
+stdbuf --output=L ./a.out ~/Data/asia_osm.mtx          1 0 3 2>&1 | tee -a "$out"
 
 # Signal completion
 curl -X POST "https://maker.ifttt.com/trigger/puzzlef/with/key/${IFTTT_KEY}?value1=$src$1"

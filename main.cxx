@@ -45,7 +45,7 @@ using namespace std;
  * @param insertionsf fraction of undirected edges to insert
  * @param insertions0 original insertions/predictions
  */
-#define PREDICT_LINKS(x, fn, deg, insertionsf, insertions0) \
+#define PREDICT_LINKS(x, fn, deg, insertionsf, insertions0, threads) \
   { \
     auto p1 = fn<deg>(x, {repeat, insertions0.size()/2}); \
     vector<tuple<K, K, V>> insertions1 = directedInsertions(p1.edges, V(1), true); \
@@ -53,7 +53,7 @@ using namespace std;
     auto it = unique(insertions1.begin(), insertions1.end()); \
     insertions1.resize(it - insertions1.begin()); \
     vector<tuple<K, K, V>> common1 = commonEdges(insertions0, insertions1); \
-    glog(p1, #fn #deg, insertionsf, insertions0, insertions1, common1); \
+    glog(p1, #fn #deg, insertionsf, insertions0, insertions1, common1, threads); \
   }
 
 
@@ -64,19 +64,19 @@ using namespace std;
  * @param insertionsf fraction of undirected edges to insert
  * @param insertions0 original insertions/predictions
  */
-#define PREDICT_LINKS_ALL(x, fn, insertionsf, insertions0) \
+#define PREDICT_LINKS_ALL(x, fn, insertionsf, insertions0, threads) \
   { \
-    PREDICT_LINKS(x, fn, 0,    insertionsf, insertions0); \
-    PREDICT_LINKS(x, fn, 2,    insertionsf, insertions0); \
-    PREDICT_LINKS(x, fn, 4,    insertionsf, insertions0); \
-    PREDICT_LINKS(x, fn, 8,    insertionsf, insertions0); \
-    PREDICT_LINKS(x, fn, 16,   insertionsf, insertions0); \
-    PREDICT_LINKS(x, fn, 32,   insertionsf, insertions0); \
-    PREDICT_LINKS(x, fn, 64,   insertionsf, insertions0); \
-    PREDICT_LINKS(x, fn, 128,  insertionsf, insertions0); \
-    PREDICT_LINKS(x, fn, 256,  insertionsf, insertions0); \
-    PREDICT_LINKS(x, fn, 512,  insertionsf, insertions0); \
-    PREDICT_LINKS(x, fn, 1024, insertionsf, insertions0); \
+    PREDICT_LINKS(x, fn, 0,    insertionsf, insertions0, threads); \
+    PREDICT_LINKS(x, fn, 2,    insertionsf, insertions0, threads); \
+    PREDICT_LINKS(x, fn, 4,    insertionsf, insertions0, threads); \
+    PREDICT_LINKS(x, fn, 8,    insertionsf, insertions0, threads); \
+    PREDICT_LINKS(x, fn, 16,   insertionsf, insertions0, threads); \
+    PREDICT_LINKS(x, fn, 32,   insertionsf, insertions0, threads); \
+    PREDICT_LINKS(x, fn, 64,   insertionsf, insertions0, threads); \
+    PREDICT_LINKS(x, fn, 128,  insertionsf, insertions0, threads); \
+    PREDICT_LINKS(x, fn, 256,  insertionsf, insertions0, threads); \
+    PREDICT_LINKS(x, fn, 512,  insertionsf, insertions0, threads); \
+    PREDICT_LINKS(x, fn, 1024, insertionsf, insertions0, threads); \
   }
 #pragma endregion
 
@@ -196,12 +196,12 @@ void runExperiment(const G& x) {
   int repeat     = REPEAT_METHOD;
   int numThreads = MAX_THREADS;
   // Follow a specific result logging format, which can be easily parsed later.
-  auto glog = [&](const auto& ans, const char *technique, double insertionsf, const auto& insertions0, const auto& insertions1, const auto& common1) {
+  auto glog = [&](const auto& ans, const char *technique, double insertionsf, const auto& insertions0, const auto& insertions1, const auto& common1, int threads) {
     double precision = double(common1.size()) / max(insertions1.size(), size_t(1));
     double recall    = double(common1.size()) / max(insertions0.size(), size_t(1));
     printf(
       "{-%.3e/+%.3e batchf, %03d threads} -> {%09.1fms, %09.1fms scoring, %.3e precision, %.3e recall} %s\n",
-      0.0, insertionsf, numThreads, ans.time, ans.scoringTime, precision, recall, technique
+      0.0, insertionsf, threads, ans.time, ans.scoringTime, precision, recall, technique
     );
   };
   // Get predicted links from Original Jaccard coefficient.
@@ -209,14 +209,30 @@ void runExperiment(const G& x) {
     if (deletions.empty()) return;
     vector<tuple<K, K, V>>   deletions0 = directedInsertions(deletions, V(1));
     sort(deletions0.begin(), deletions0.end());
-    PREDICT_LINKS_ALL(y, predictLinksJaccardCoefficientOmp,      deletionsf, deletions0);
-    PREDICT_LINKS_ALL(y, predictLinksSorensenIndexOmp,           deletionsf, deletions0);
-    PREDICT_LINKS_ALL(y, predictLinksSaltonCosineSimilarityOmp,  deletionsf, deletions0);
-    PREDICT_LINKS_ALL(y, predictLinksHubPromotedOmp,             deletionsf, deletions0);
-    PREDICT_LINKS_ALL(y, predictLinksHubDepressedOmp,            deletionsf, deletions0);
-    PREDICT_LINKS_ALL(y, predictLinksLeichtHolmeNermanScoreOmp,  deletionsf, deletions0);
-    PREDICT_LINKS_ALL(y, predictLinksAdamicAdarCoefficientOmp,   deletionsf, deletions0);
-    PREDICT_LINKS_ALL(y, predictLinksResourceAllocationScoreOmp, deletionsf, deletions0);
+    for (int threads=1; threads<=numThreads; threads*=2) {
+      omp_set_num_threads(threads);
+      if (deletionsf < 1e-2) {
+        PREDICT_LINKS(y, predictLinksJaccardCoefficientOmp,      256, deletionsf, deletions0, threads);
+        PREDICT_LINKS(y, predictLinksSorensenIndexOmp,           256, deletionsf, deletions0, threads);
+        PREDICT_LINKS(y, predictLinksSaltonCosineSimilarityOmp,  256, deletionsf, deletions0, threads);
+        PREDICT_LINKS(y, predictLinksHubPromotedOmp,               4, deletionsf, deletions0, threads);
+        PREDICT_LINKS(y, predictLinksHubDepressedOmp,            256, deletionsf, deletions0, threads);
+        PREDICT_LINKS(y, predictLinksLeichtHolmeNermanScoreOmp,  128, deletionsf, deletions0, threads);
+        PREDICT_LINKS(y, predictLinksAdamicAdarCoefficientOmp,     4, deletionsf, deletions0, threads);
+        PREDICT_LINKS(y, predictLinksResourceAllocationScoreOmp, 512, deletionsf, deletions0, threads);
+      }
+      else {
+        PREDICT_LINKS(y, predictLinksJaccardCoefficientOmp,       16, deletionsf, deletions0, threads);
+        PREDICT_LINKS(y, predictLinksSorensenIndexOmp,            16, deletionsf, deletions0, threads);
+        PREDICT_LINKS(y, predictLinksSaltonCosineSimilarityOmp,   16, deletionsf, deletions0, threads);
+        PREDICT_LINKS(y, predictLinksHubPromotedOmp,               4, deletionsf, deletions0, threads);
+        PREDICT_LINKS(y, predictLinksHubDepressedOmp,             16, deletionsf, deletions0, threads);
+        PREDICT_LINKS(y, predictLinksLeichtHolmeNermanScoreOmp,    4, deletionsf, deletions0, threads);
+        PREDICT_LINKS(y, predictLinksAdamicAdarCoefficientOmp,     4, deletionsf, deletions0, threads);
+        PREDICT_LINKS(y, predictLinksResourceAllocationScoreOmp,   4, deletionsf, deletions0, threads);
+      }
+      omp_set_num_threads(numThreads);
+    }
   });
 }
 
