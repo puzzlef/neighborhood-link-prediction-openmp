@@ -5,7 +5,7 @@ const path = require('path');
 const ROMPTH = /^OMP_NUM_THREADS=(\d+)/;
 const RGRAPH = /^Loading graph .*\/(.*?)\.mtx \.\.\./m;
 const RORDER = /^order: (\d+) size: (\d+) (?:\[\w+\] )?\{\}/m;
-const RPREDT = /^\{\-(.+?)\/\+(.+?) batchf, (.+?) threads\} -> \{(.+?)ms, (.+?) accuracy, (.+?) precision\} (.+)/m;
+const RPREDT = /^\{\-(.+?)\/\+(.+?) batchf, (.+?) threads\} -> \{(.+?)ms, (.+?) scoring, (.+?) precision, (.+?) recall\} (.+)/m;
 
 
 
@@ -60,15 +60,16 @@ function readLogLine(ln, data, state) {
     state.size  = parseFloat(size);
   }
   else if (RPREDT.test(ln)) {
-    var [, batch_deletions_fraction, batch_insertions_fraction, num_threads, prediction_time, prediction_accuracy, prediction_precision, prediction_technique] = RPREDT.exec(ln);
+    var [, batch_deletions_fraction, batch_insertions_fraction, num_threads, total_time, scoring_time, precision, recall, technique] = RPREDT.exec(ln);
     data.get(state.graph).push(Object.assign({}, state, {
       batch_deletions_fraction:  parseFloat(batch_deletions_fraction),
       batch_insertions_fraction: parseFloat(batch_insertions_fraction),
-      num_threads: parseFloat(num_threads),
-      prediction_time:      parseFloat(prediction_time),
-      prediction_accuracy:  parseFloat(prediction_accuracy),
-      prediction_precision: parseFloat(prediction_precision),
-      prediction_technique,
+      num_threads:  parseFloat(num_threads),
+      total_time:   parseFloat(total_time),
+      scoring_time: parseFloat(scoring_time),
+      precision:    parseFloat(precision),
+      recall:       parseFloat(recall),
+      technique,
     }));
   }
   return state;
