@@ -7,6 +7,7 @@
 #include "_main.hxx"
 #ifdef OPENMP
 #include <omp.h>
+#include <parallel/algorithm>
 #endif
 
 using std::tuple;
@@ -417,7 +418,7 @@ inline auto predictLinksWithIntersectionOmp(const G& x, const PredictLinkOptions
     for (int t=0; t<T; ++t)
       a.insert(a.end(), (*as[t]).begin(), (*as[t]).end());
     auto fl = [](const auto& x, const auto& y) { return get<2>(x) > get<2>(y); };
-    sort(a.begin(), a.end(), fl);
+    __gnu_parallel::sort(a.begin(), a.end(), fl);
     // Truncate to maximum number of edges.
     if (a.size() > o.maxEdges) a.resize(o.maxEdges);
   });
