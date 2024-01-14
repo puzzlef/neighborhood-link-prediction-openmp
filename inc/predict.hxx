@@ -386,7 +386,7 @@ inline auto predictLinksWithIntersection(const G& x, const PredictLinkOptions<W>
 template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class W, class FS>
 inline auto predictLinksWithIntersection(const G& x, const PredictLinkOptions<W>& o, FS fs) {
   using K = typename G::key_type;
-  auto fu = [](auto& entry, auto v) { ++entry; };
+  auto fu = [](auto& entry, auto u, auto v) { ++entry; };
   return predictLinksWithIntersection<MINDEGREE1, MAXFACTOR2, FORCEHEAP, false>(x, o, K(), fs, fu);
 }
 
@@ -477,7 +477,7 @@ inline auto predictLinksWithIntersectionOmp(const G& x, const PredictLinkOptions
 template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class W, class FS>
 inline auto predictLinksWithIntersectionOmp(const G& x, const PredictLinkOptions<W>& o, FS fs) {
   using K = typename G::key_type;
-  auto fu = [](auto& entry, auto v) { ++entry; };
+  auto fu = [](auto& entry, auto u, auto v) { ++entry; };
   return predictLinksWithIntersectionOmp<MINDEGREE1, MAXFACTOR2, FORCEHEAP, false>(x, o, K(), fs, fu);
 }
 #endif
