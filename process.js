@@ -5,9 +5,7 @@ const path = require('path');
 const ROMPTH = /^OMP_NUM_THREADS=(\d+)/;
 const RGRAPH = /^Loading graph .*\/(.*?)\.mtx \.\.\./m;
 const RORDER = /^order: (\d+) size: (\d+) (?:\[\w+\] )?\{\}/m;
-const RPREDT = /^\{\-(.+?) batchf, (.+?) threads\} -> \{(.+?)ms, (.+?) accuracy, (.+?) precision\} (.+)/m;
-const RRESLT = /^\{\-(.+?) batchf, (.+?) threads\} -> \{(.+?)ms, (.+?)ms preproc, (.+?) iters, (.+?) modularity\} (.+)/m;
-
+const RRESLT = /^\{-(.+?)\/\+(.+?) batchf, (.+?) threads\} -> \{(.+?)ms, (.+?)ms scoring, (.+?) precision, (.+?) recall\} (.+)/m;
 
 
 
@@ -60,26 +58,16 @@ function readLogLine(ln, data, state) {
     state.order = parseFloat(order);
     state.size  = parseFloat(size);
   }
-  else if (RPREDT.test(ln)) {
-    var [, batch_deletions_fraction, num_threads, prediction_time, prediction_accuracy, prediction_precision, prediction_technique] = RPREDT.exec(ln);
-    Object.assign(state, {
-      batch_deletions_fraction: parseFloat(batch_deletions_fraction),
-      num_threads:          parseFloat(num_threads),
-      prediction_time:      parseFloat(prediction_time),
-      prediction_accuracy:  parseFloat(prediction_accuracy),
-      prediction_precision: parseFloat(prediction_precision),
-      prediction_technique,
-    });
-  }
   else if (RRESLT.test(ln)) {
-    var [, batch_deletions_fraction, num_threads, time, preprocessing_time, iterations, modularity, technique] = RRESLT.exec(ln);
+    var [, batch_deletions_fraction, batch_insertions_fraction, num_threads, time, scoring_time, precision, recall, technique] = RRESLT.exec(ln);
     data.get(state.graph).push(Object.assign({}, state, {
-      batch_deletions_fraction: parseFloat(batch_deletions_fraction),
-      num_threads: parseFloat(num_threads),
-      time:        parseFloat(time),
-      preprocessing_time: parseFloat(preprocessing_time),
-      iterations:  parseFloat(iterations),
-      modularity:  parseFloat(modularity),
+      batch_deletions_fraction:  parseFloat(batch_deletions_fraction),
+      batch_insertions_fraction: parseFloat(batch_insertions_fraction),
+      num_threads:  parseFloat(num_threads),
+      time:         parseFloat(time),
+      scoring_time: parseFloat(scoring_time),
+      precision:    parseFloat(precision),
+      recall:       parseFloat(recall),
       technique,
     }));
   }
