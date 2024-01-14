@@ -36,7 +36,7 @@ struct PredictLinkOptions {
   int repeat;
   /** Maximum number of edges to predict [-1]. */
   size_t maxEdges;
-  /** Minimum score to consider a link [0]. */
+  /** Minimum score above which to consider a link [0]. */
   W   minScore;
   #pragma endregion
 
@@ -46,7 +46,7 @@ struct PredictLinkOptions {
    * Define options for Link Prediction algorithm.
    * @param repeat number of times to repeat the algorithm [1]
    * @param maxEdges maximum number of edges to predict [-1]
-   * @param minScore minimum score to consider a link [0]
+   * @param minScore minimum score above which to consider a link [0]
    */
   PredictLinkOptions(int repeat=1, size_t maxEdges=size_t(-1), W minScore=W()) :
   repeat(repeat), maxEdges(maxEdges), minScore(minScore) {}
@@ -227,10 +227,12 @@ inline void predictLinksWithIntersectionLoopU(vector<tuple<K, K, W>>& a, vector<
       if (CUSTOMVALUE) predictScanEdgesU(vedgs, veout, x, v, ft, fu);
       else             predictScanEdgesU(vedgs, veout, x, v, ft);
     });
+    // Avoid first order neighbors.
+    x.forEachEdgeKey(u, [&](auto v) { veout[v] = V(); });
     // Get hub promoted score, and add to prediction list.
     for (K v : vedgs) {
-      W   score = fs(u, v, veout[v]);
-      if (score < SMIN) continue;  // Skip low scores
+      W   score  = fs(u, v, veout[v]);
+      if (score <= SMIN) continue;  // Skip low scores
       // Add to prediction list.
       size_t A = a.size();
       auto  fl = [](const auto& x, const auto& y) { return get<2>(x) > get<2>(y); };
@@ -295,10 +297,12 @@ inline void predictLinksWithIntersectionLoopOmpU(vector<vector<tuple<K, K, W>>*>
       if (CUSTOMVALUE) predictScanEdgesU(*vedgs[t], *veout[t], x, v, ft, fu);
       else             predictScanEdgesU(*vedgs[t], *veout[t], x, v, ft);
     });
+    // Avoid first order neighbors.
+    x.forEachEdgeKey(u, [&](auto v) { (*veout[t])[v] = V(); });
     // Get hub promoted score, and add to prediction list.
     for (K v : *vedgs[t]) {
-      W   score = fs(u, v, (*veout[t])[v]);
-      if (score < SMIN) continue;  // Skip low scores
+      W   score  = fs(u, v, (*veout[t])[v]);
+      if (score <= SMIN) continue;  // Skip low scores
       // Add to prediction list.
       size_t A = (*as[t]).size();
       auto  fl = [](const auto& x, const auto& y) { return get<2>(x) > get<2>(y); };
