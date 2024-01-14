@@ -79,4 +79,61 @@ inline G addSelfLoopsOmp(const G& x, E w, FT ft) {
 }
 #endif
 #pragma endregion
+
+
+
+
+#pragma region REMOVE SELF-LOOPS
+/**
+ * Remove self-loops from a graph.
+ * @param a graph to remove self-loops from (updated)
+ * @param ft test function to determine if self-loop should be removed (vertex)
+ */
+template <class G, class FT>
+inline void removeSelfLoopsU(G& a, FT ft) {
+  a.forEachVertexKey([&](auto u) { if (ft(u)) a.removeEdge(u, u); });
+  a.update();
+}
+
+/**
+ * Remove self-loops from a graph.
+ * @param a input graph
+ * @param ft test function to determine if self-loop should be removed (vertex)
+ * @returns graph with self-loops removed
+ */
+template <class G, class FT>
+inline G removeSelfLoops(const G& x, FT ft) {
+  G a = x; removeSelfLoopsU(a, ft);
+  return a;
+}
+
+
+#ifdef OPENMP
+/**
+ * Remove self-loops from a graph in parallel.
+ * @param a graph to remove self-loops from (updated)
+ * @param ft test function to determine if self-loop should be removed (vertex)
+ */
+template <class G, class FT>
+inline void removeSelfLoopsOmpU(G& a, FT ft) {
+  #pragma omp parallel
+  {
+    a.forEachVertexKey([&](auto u) { if (ft(u)) removeEdgeOmpU(a, u, u); });
+  }
+  updateOmpU(a);
+}
+
+/**
+ * Remove self-loops from a graph in parallel.
+ * @param a input graph
+ * @param ft test function to determine if self-loop should be removed (vertex)
+ * @returns graph with self-loops removed
+ */
+template <class G, class E, class FT>
+inline G removeSelfLoopsOmp(const G& x, FT ft) {
+  G a = x; removeSelfLoopsOmpU(a, ft);
+  return a;
+}
+#endif
+#pragma endregion
 #pragma endregion
