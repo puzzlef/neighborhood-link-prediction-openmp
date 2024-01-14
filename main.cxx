@@ -28,7 +28,7 @@ using namespace std;
 #endif
 #ifndef REPEAT_METHOD
 /** Number of times to repeat each method. */
-#define REPEAT_METHOD 1
+#define REPEAT_METHOD 5
 #endif
 #pragma endregion
 
@@ -101,64 +101,64 @@ void runExperiment(const G& x) {
   int numThreads = MAX_THREADS;
   // Follow a specific result logging format, which can be easily parsed later.
   auto glog = [&](const auto& ans, const char *technique, int numThreads, double insertionsf, const auto& insertions0, const auto& insertions1, const auto& common1) {
-    double accuracy  = double(common1.size()) / (insertions0.size() + insertions1.size() - common1.size());
-    double precision = double(common1.size()) / insertions1.size();
+    double precision = double(common1.size()) / max(insertions1.size(), size_t(1));
+    double recall    = double(common1.size()) / max(insertions0.size(), size_t(1));
     printf(
-      "{-%.3e/+%.3e batchf, %03d threads} -> {%09.1fms, %.3e accuracy, %.3e precision} %s\n",
-      0.0, insertionsf, numThreads, ans.time, accuracy, precision, technique
+      "{-%.3e/+%.3e batchf, %03d threads} -> {%09.1fms, %09.1fms scoring, %.3e precision, %.3e recall} %s\n",
+      0.0, insertionsf, numThreads, ans.time, ans.scoringTime, precision, recall, technique
     );
   };
   // Get predicted links from Original Jaccard coefficient.
-  for (float insertionsf=1e-7; insertionsf<=0.1; insertionsf*=10) {
-    size_t insertionsc = insertionsf * x.size();
+  for (float insertionsf=1e-4; insertionsf<=0.1; insertionsf*=10) {
+    size_t insertionsc = insertionsf * x.size() / 2;
     auto p0 = predictLinksJaccardCoefficientOmp<0, 0>(x, {repeat, insertionsc});
-    vector<tuple<K, K, V>>    insertions0 = directedInsertions(p0.edges, V(1));
+    vector<tuple<K, K, V>>    insertions0 = directedInsertions(p0.edges, V(1), true);
     sort(insertions0.begin(), insertions0.end());
     glog(p0, "predictLinksJaccardCoefficientOmp", numThreads, insertionsf, insertions0, insertions0, insertions0);
     {
       // Predict links using Modified Jaccard's coefficient.
-      auto p1 = predictLinksJaccardCoefficientOmp<0, 2>(x, {repeat, insertions0.size()});
-      vector<tuple<K, K, V>> insertions1 = directedInsertions(p1.edges, V(1));
+      auto p1 = predictLinksJaccardCoefficientOmp<0, 2>(x, {repeat, insertionsc});
+      vector<tuple<K, K, V>> insertions1 = directedInsertions(p1.edges, V(1), true);
       sort(insertions1.begin(), insertions1.end());
       vector<tuple<K, K, V>> common1 = commonEdges(insertions0, insertions1);
       glog(p1, "predictLinksJaccardCoefficientOmp2", numThreads, insertionsf, insertions0, insertions1, common1);
     }
     {
       // Predict links using Modified Jaccard's coefficient.
-      auto p1 = predictLinksJaccardCoefficientOmp<0, 4>(x, {repeat, insertions0.size()});
-      vector<tuple<K, K, V>> insertions1 = directedInsertions(p1.edges, V(1));
+      auto p1 = predictLinksJaccardCoefficientOmp<0, 4>(x, {repeat, insertionsc});
+      vector<tuple<K, K, V>> insertions1 = directedInsertions(p1.edges, V(1), true);
       sort(insertions1.begin(), insertions1.end());
       vector<tuple<K, K, V>> common1 = commonEdges(insertions0, insertions1);
       glog(p1, "predictLinksJaccardCoefficientOmp4", numThreads, insertionsf, insertions0, insertions1, common1);
     }
     {
       // Predict links using Modified Jaccard's coefficient.
-      auto p1 = predictLinksJaccardCoefficientOmp<0, 8>(x, {repeat, insertions0.size()});
-      vector<tuple<K, K, V>> insertions1 = directedInsertions(p1.edges, V(1));
+      auto p1 = predictLinksJaccardCoefficientOmp<0, 8>(x, {repeat, insertionsc});
+      vector<tuple<K, K, V>> insertions1 = directedInsertions(p1.edges, V(1), true);
       sort(insertions1.begin(), insertions1.end());
       vector<tuple<K, K, V>> common1 = commonEdges(insertions0, insertions1);
       glog(p1, "predictLinksJaccardCoefficientOmp8", numThreads, insertionsf, insertions0, insertions1, common1);
     }
     {
       // Predict links using Modified Jaccard's coefficient.
-      auto p1 = predictLinksJaccardCoefficientOmp<0, 16>(x, {repeat, insertions0.size()});
-      vector<tuple<K, K, V>> insertions1 = directedInsertions(p1.edges, V(1));
+      auto p1 = predictLinksJaccardCoefficientOmp<0, 16>(x, {repeat, insertionsc});
+      vector<tuple<K, K, V>> insertions1 = directedInsertions(p1.edges, V(1), true);
       sort(insertions1.begin(), insertions1.end());
       vector<tuple<K, K, V>> common1 = commonEdges(insertions0, insertions1);
       glog(p1, "predictLinksJaccardCoefficientOmp16", numThreads, insertionsf, insertions0, insertions1, common1);
     }
     {
       // Predict links using Modified Jaccard's coefficient.
-      auto p1 = predictLinksJaccardCoefficientOmp<0, 32>(x, {repeat, insertions0.size()});
-      vector<tuple<K, K, V>> insertions1 = directedInsertions(p1.edges, V(1));
+      auto p1 = predictLinksJaccardCoefficientOmp<0, 32>(x, {repeat, insertionsc});
+      vector<tuple<K, K, V>> insertions1 = directedInsertions(p1.edges, V(1), true);
       sort(insertions1.begin(), insertions1.end());
       vector<tuple<K, K, V>> common1 = commonEdges(insertions0, insertions1);
       glog(p1, "predictLinksJaccardCoefficientOmp32", numThreads, insertionsf, insertions0, insertions1, common1);
     }
     {
       // Predict links using Modified Jaccard's coefficient.
-      auto p1 = predictLinksJaccardCoefficientOmp<0, 64>(x, {repeat, insertions0.size()});
-      vector<tuple<K, K, V>> insertions1 = directedInsertions(p1.edges, V(1));
+      auto p1 = predictLinksJaccardCoefficientOmp<0, 64>(x, {repeat, insertionsc});
+      vector<tuple<K, K, V>> insertions1 = directedInsertions(p1.edges, V(1), true);
       sort(insertions1.begin(), insertions1.end());
       vector<tuple<K, K, V>> common1 = commonEdges(insertions0, insertions1);
       glog(p1, "predictLinksJaccardCoefficientOmp64", numThreads, insertionsf, insertions0, insertions1, common1);
