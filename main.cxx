@@ -210,28 +210,15 @@ void runExperiment(const G& x) {
     if (deletions.empty()) return;
     vector<tuple<K, K, V>>   deletions0 = directedInsertions(deletions, V(1));  // Deletions is undirected already
     sort(deletions0.begin(), deletions0.end());
-    if (deletionsf < 1e-2) {
-      PREDICT_LINKS(y, predictLinksCommonNeighborsOmp,         256, deletionsf, deletions0);
-      PREDICT_LINKS(y, predictLinksJaccardCoefficientOmp,      256, deletionsf, deletions0);
-      PREDICT_LINKS(y, predictLinksSorensenIndexOmp,           256, deletionsf, deletions0);
-      PREDICT_LINKS(y, predictLinksSaltonCosineSimilarityOmp,  256, deletionsf, deletions0);
-      PREDICT_LINKS(y, predictLinksHubPromotedOmp,               4, deletionsf, deletions0);
-      PREDICT_LINKS(y, predictLinksHubDepressedOmp,            256, deletionsf, deletions0);
-      PREDICT_LINKS(y, predictLinksLeichtHolmeNermanScoreOmp,  128, deletionsf, deletions0);
-      PREDICT_LINKS(y, predictLinksAdamicAdarCoefficientOmp,     4, deletionsf, deletions0);
-      PREDICT_LINKS(y, predictLinksResourceAllocationScoreOmp, 512, deletionsf, deletions0);
-    }
-    else {
-      PREDICT_LINKS(y, predictLinksCommonNeighborsOmp,          16, deletionsf, deletions0);
-      PREDICT_LINKS(y, predictLinksJaccardCoefficientOmp,       16, deletionsf, deletions0);
-      PREDICT_LINKS(y, predictLinksSorensenIndexOmp,            16, deletionsf, deletions0);
-      PREDICT_LINKS(y, predictLinksSaltonCosineSimilarityOmp,   16, deletionsf, deletions0);
-      PREDICT_LINKS(y, predictLinksHubPromotedOmp,               4, deletionsf, deletions0);
-      PREDICT_LINKS(y, predictLinksHubDepressedOmp,             16, deletionsf, deletions0);
-      PREDICT_LINKS(y, predictLinksLeichtHolmeNermanScoreOmp,    4, deletionsf, deletions0);
-      PREDICT_LINKS(y, predictLinksAdamicAdarCoefficientOmp,     4, deletionsf, deletions0);
-      PREDICT_LINKS(y, predictLinksResourceAllocationScoreOmp,   4, deletionsf, deletions0);
-    }
+    PREDICT_LINKS(y, predictLinksCommonNeighborsOmp,           0, deletionsf, deletions0);
+    PREDICT_LINKS(y, predictLinksJaccardCoefficientOmp,        0, deletionsf, deletions0);
+    PREDICT_LINKS(y, predictLinksSorensenIndexOmp,             0, deletionsf, deletions0);
+    PREDICT_LINKS(y, predictLinksSaltonCosineSimilarityOmp,    0, deletionsf, deletions0);
+    PREDICT_LINKS(y, predictLinksHubPromotedOmp,               0, deletionsf, deletions0);
+    PREDICT_LINKS(y, predictLinksHubDepressedOmp,              0, deletionsf, deletions0);
+    PREDICT_LINKS(y, predictLinksLeichtHolmeNermanScoreOmp,    0, deletionsf, deletions0);
+    PREDICT_LINKS(y, predictLinksAdamicAdarCoefficientOmp,     0, deletionsf, deletions0);
+    PREDICT_LINKS(y, predictLinksResourceAllocationScoreOmp,   0, deletionsf, deletions0);
   });
 }
 

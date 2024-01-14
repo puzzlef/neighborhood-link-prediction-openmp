@@ -9,7 +9,7 @@ if [[ "$DOWNLOAD" != "0" ]]; then
   rm -rf $src
   git clone https://github.com/puzzlef/$src
   cd $src
-  git checkout input-large
+  git checkout input-large-default
 fi
 
 # Fixed config
