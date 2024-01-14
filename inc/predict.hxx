@@ -231,7 +231,7 @@ inline void predictLinksWithIntersectionLoopU(vector<tuple<K, K, W>>& a, vector<
     });
     // Avoid first order neighbors.
     x.forEachEdgeKey(u, [&](auto v) { veout[v] = V(); });
-    // Get hub promoted score, and add to prediction list.
+    // Get similarity score, and add to prediction list.
     for (K v : vedgs) {
       W   score  = fs(u, v, veout[v]);
       if (score <= SMIN) continue;  // Skip low scores
@@ -304,7 +304,7 @@ inline void predictLinksWithIntersectionLoopOmpU(vector<vector<tuple<K, K, W>>*>
     });
     // Avoid first order neighbors.
     x.forEachEdgeKey(u, [&](auto v) { (*veout[t])[v] = V(); });
-    // Get hub promoted score, and add to prediction list.
+    // Get similarity score, and add to prediction list.
     for (K v : *vedgs[t]) {
       W   score  = fs(u, v, (*veout[t])[v]);
       if (score <= SMIN) continue;  // Skip low scores
@@ -393,7 +393,7 @@ inline auto predictLinksWithIntersection(const G& x, const PredictLinkOptions<W>
 
 #ifdef OPENMP
 /**
- * Predict links using hub promoted score.
+ * Predict links using a similarity metric.
  * @tparam MINDEGREE1 degree of high degree first order neighbors to skip (if set)
  * @tparam MAXFACTOR2 maximum degree factor between source and second order neighbor to allow (if set)
  * @tparam FORCEHEAP always use heap to store top edges
@@ -465,7 +465,7 @@ inline auto predictLinksWithIntersectionOmp(const G& x, const PredictLinkOptions
 
 
 /**
- * Predict links using hub promoted score.
+ * Predict links using a similarity metric.
  * @tparam MINDEGREE1 degree of high degree first order neighbors to skip (if set)
  * @tparam MAXFACTOR2 maximum degree factor between source and second order neighbor to allow (if set)
  * @tparam FORCEHEAP always use heap to store top edges
