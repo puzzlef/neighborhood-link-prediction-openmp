@@ -166,14 +166,14 @@ inline void predictScanEdgesU(vector<K>& vedgs, vector<V>& veout, const G& x, K 
  * @param x original graph
  * @param u given vertex
  * @param ft include edge?
- * @param fu edge value update function (entry, v)
+ * @param fu edge value update function (entry, u, v)
  */
 template <class G, class K, class V, class FT, class FV>
 inline void predictScanEdgesU(vector<K>& vedgs, vector<V>& veout, const G& x, K u, FT ft, FV fu) {
   x.forEachEdgeKey(u, [&](auto v) {
     if (!ft(v)) return;
     if (!veout[v]) vedgs.push_back(v);
-    fu(veout[v], v);
+    fu(veout[v], u, v);
   });
 }
 
@@ -208,7 +208,7 @@ inline void predictClearScanW(vector<K>& vedgs, vector<V>& veout) {
  * @param SMIN minimum score to consider a link
  * @param NMAX maximum number of edges to predict
  * @param fs score function (u, v, |N(u) ∩ N(v)|) => score, where N(u) is the set of neighbors of u
- * @param fu edge value update function (entry, v)
+ * @param fu edge value update function (entry, u, v)
  */
 template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, bool CUSTOMVALUE=false, class G, class K, class V, class W, class FS, class FU>
 inline void predictLinksWithIntersectionLoopU(vector<tuple<K, K, W>>& a, vector<K>& vedgs, vector<V>& veout, const G& x, W SMIN, size_t NMAX, FS fs, FU fu) {
@@ -272,7 +272,7 @@ inline void predictLinksWithIntersectionLoopU(vector<tuple<K, K, W>>& a, vector<
  * @param SMIN minimum score to consider a link
  * @param NMAX maximum number of edges to predict
  * @param fs score function (u, v, |N(u) ∩ N(v)|) => score, where N(u) is the set of neighbors of u
- * @param fu edge value update function (entry, v)
+ * @param fu edge value update function (entry, u, v)
  */
 template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, bool CUSTOMVALUE=false, class G, class K, class V, class W, class FS, class FU>
 inline void predictLinksWithIntersectionLoopOmpU(vector<vector<tuple<K, K, W>>*>& as, vector<vector<K>*>& vedgs, vector<vector<V>*>& veout, const G& x, W SMIN, size_t NMAX, FS fs, FU fu) {
@@ -339,7 +339,7 @@ inline void predictLinksWithIntersectionLoopOmpU(vector<vector<tuple<K, K, W>>*>
  * @param o predict link options
  * @param VT hashtable value type
  * @param fs score function (u, v, |N(u) ∩ N(v)|) => score, where N(u) is the set of neighbors of u
- * @param fu edge value update function (entry, v)
+ * @param fu edge value update function (entry, u, v)
  * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
  */
 template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, bool CUSTOMVALUE=false, class G, class V, class W, class FS, class FU>
@@ -390,7 +390,7 @@ inline auto predictLinksWithIntersection(const G& x, const PredictLinkOptions<W>
  * @param o predict link options
  * @param VT hashtable value type
  * @param fs score function (u, v, |N(u) ∩ N(v)|) => score, where N(u) is the set of neighbors of u
- * @param fu edge value update function (entry, v)
+ * @param fu edge value update function (entry, u, v)
  * @returns [{u, v, score}] undirected predicted links, ordered by score (descending)
  */
 template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, bool CUSTOMVALUE=false, class G, class V, class W, class FS, class FU>
@@ -693,7 +693,7 @@ inline auto predictLinksLeichtHolmeNermanScoreOmp(const G& x, const PredictLinkO
  */
 template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class W=float>
 inline auto predictLinksAdamicAdarCoefficient(const G& x, const PredictLinkOptions<W>& o={}) {
-  auto fu = [&](auto& entry, auto v) { entry += 1.0 / log(x.degree(v)); };  // What if degree(v) == 1?
+  auto fu = [&](auto& entry, auto u, auto v) { entry += 1.0 / log(x.degree(u)); };
   auto fs = [&](auto u, auto v, auto Nuv) { return W(Nuv); };
   return predictLinksWithIntersection<MINDEGREE1, MAXFACTOR2, FORCEHEAP, true>(x, o, W(), fs, fu);
 }
@@ -711,7 +711,7 @@ inline auto predictLinksAdamicAdarCoefficient(const G& x, const PredictLinkOptio
  */
 template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class W=float>
 inline auto predictLinksAdamicAdarCoefficientOmp(const G& x, const PredictLinkOptions<W>& o={}) {
-  auto fu = [&](auto& entry, auto v) { entry += 1.0 / log(x.degree(v)); };  // What if degree(v) == 1?
+  auto fu = [&](auto& entry, auto u, auto v) { entry += 1.0 / log(x.degree(u)); };
   auto fs = [&](auto u, auto v, auto Nuv) { return W(Nuv); };
   return predictLinksWithIntersectionOmp<MINDEGREE1, MAXFACTOR2, FORCEHEAP, true>(x, o, W(), fs, fu);
 }
@@ -733,7 +733,7 @@ inline auto predictLinksAdamicAdarCoefficientOmp(const G& x, const PredictLinkOp
  */
 template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class W=float>
 inline auto predictLinksResourceAllocationScore(const G& x, const PredictLinkOptions<W>& o={}) {
-  auto fu = [&](auto& entry, auto v) { entry += 1.0 / x.degree(v); };
+  auto fu = [&](auto& entry, auto u, auto v) { entry += 1.0 / x.degree(u); };
   auto fs = [&](auto u, auto v, auto Nuv) { return W(Nuv); };
   return predictLinksWithIntersection<MINDEGREE1, MAXFACTOR2, FORCEHEAP, true>(x, o, W(), fs, fu);
 }
@@ -751,7 +751,7 @@ inline auto predictLinksResourceAllocationScore(const G& x, const PredictLinkOpt
  */
 template <int MINDEGREE1=4, int MAXFACTOR2=0, bool FORCEHEAP=false, class G, class W=float>
 inline auto predictLinksResourceAllocationScoreOmp(const G& x, const PredictLinkOptions<W>& o={}) {
-  auto fu = [&](auto& entry, auto v) { entry += 1.0 / x.degree(v); };
+  auto fu = [&](auto& entry, auto u, auto v) { entry += 1.0 / x.degree(u); };
   auto fs = [&](auto u, auto v, auto Nuv) { return W(Nuv); };
   return predictLinksWithIntersectionOmp<MINDEGREE1, MAXFACTOR2, FORCEHEAP, true>(x, o, W(), fs, fu);
 }
