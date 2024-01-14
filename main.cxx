@@ -209,6 +209,7 @@ void runExperiment(const G& x) {
     if (deletions.empty()) return;
     vector<tuple<K, K, V>>   deletions0 = directedInsertions(deletions, V(1));
     sort(deletions0.begin(), deletions0.end());
+    PREDICT_LINKS_ALL(y, predictLinksCommonNeighborsOmp,         deletionsf, deletions0);
     PREDICT_LINKS_ALL(y, predictLinksJaccardCoefficientOmp,      deletionsf, deletions0);
     PREDICT_LINKS_ALL(y, predictLinksSorensenIndexOmp,           deletionsf, deletions0);
     PREDICT_LINKS_ALL(y, predictLinksSaltonCosineSimilarityOmp,  deletionsf, deletions0);
