@@ -7,7 +7,6 @@
 #include "_main.hxx"
 #ifdef OPENMP
 #include <omp.h>
-#include <parallel/algorithm>
 #endif
 
 using std::tuple;
@@ -436,11 +435,13 @@ inline auto predictLinksWithIntersectionOmp(const G& x, const PredictLinkOptions
       sort((*as[t]).begin(), (*as[t]).end(), fl);
     }
     // Merge per-thread prediction lists using max-heap.
-    for (int t=0; t<T; ++t)
-      heap[t] = {t, get<2>((*as[t]).back())};
+    for (int t=0; t<T; ++t) {
+      if ((*as[t]).empty()) continue;
+      heap.push_back({t, get<2>((*as[t]).back())});
+    }
     auto fl = [](const auto& x, const auto& y) { return get<1>(x) < get<1>(y); };
     make_heap(heap.begin(), heap.end(), fl);
-    while (a.size() < o.maxEdges) {
+    while (!heap.empty() && a.size() < o.maxEdges) {
       // Get thread with highest score.
       pop_heap(heap.begin(), heap.end(), fl);
       int t = get<0>(heap.back());
