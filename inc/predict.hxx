@@ -419,6 +419,8 @@ inline auto predictLinksWithIntersectionOmp(const G& x, const PredictLinkOptions
   vector<vector<K>*> vedgs(T);
   vector<vector<V>*> veout(T);
   predictAllocateHashtablesW(vedgs, veout, S);
+  // Setup heap for merging phase.
+  vector<tuple<int, W>> heap(T);
   // Predict links in parallel.
   float ts = measureDuration([&]() {
     for (int t=0; t<T; ++t)
@@ -426,13 +428,32 @@ inline auto predictLinksWithIntersectionOmp(const G& x, const PredictLinkOptions
     if (o.maxEdges > 0) predictLinksWithIntersectionLoopOmpU<MINDEGREE1, MAXFACTOR2, FORCEHEAP, CUSTOMVALUE>(as, vedgs, veout, x, o.minScore, o.maxEdges, fs, fu);
   }, o.repeat);
   float to = measureDuration([&]() {
-    // Merge per-thread prediction lists.
+    // Sort per-thread prediction lists (ascending by score).
+    #pragma omp parallel
+    {
+      int  t  = omp_get_thread_num();
+      auto fl = [](const auto& x, const auto& y) { return get<2>(x) < get<2>(y); };
+      sort((*as[t]).begin(), (*as[t]).end(), fl);
+    }
+    // Merge per-thread prediction lists using max-heap.
     for (int t=0; t<T; ++t)
-      a.insert(a.end(), (*as[t]).begin(), (*as[t]).end());
-    auto fl = [](const auto& x, const auto& y) { return get<2>(x) > get<2>(y); };
-    __gnu_parallel::sort(a.begin(), a.end(), fl);
-    // Truncate to maximum number of edges.
-    if (a.size() > o.maxEdges) a.resize(o.maxEdges);
+      heap[t] = {t, get<2>((*as[t]).back())};
+    auto fl = [](const auto& x, const auto& y) { return get<1>(x) < get<1>(y); };
+    make_heap(heap.begin(), heap.end(), fl);
+    while (a.size() < o.maxEdges) {
+      // Get thread with highest score.
+      pop_heap(heap.begin(), heap.end(), fl);
+      int t = get<0>(heap.back());
+      heap.pop_back();
+      // Add top edge to prediction list.
+      a.push_back((*as[t]).back());
+      (*as[t]).pop_back();
+      // Update heap.
+      if (!(*as[t]).empty()) {
+        heap.push_back({t, get<2>((*as[t]).back())});
+        push_heap(heap.begin(), heap.end(), fl);
+      }
+    }
   });
   // Free per-thread prediction lists.
   for (int t=0; t<T; ++t)
