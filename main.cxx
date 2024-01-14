@@ -239,8 +239,10 @@ int main(int argc, char **argv) {
   LOG("OMP_NUM_THREADS=%d\n", MAX_THREADS);
   LOG("Loading graph %s ...\n", file);
   DiGraph<K, None, V> x;
+  auto fl = [](auto u) { return true; };
   readMtxOmpW(x, file, weighted); LOG(""); println(x);
   if (!symmetric) { x = symmetrizeOmp(x); LOG(""); print(x); printf(" (symmetrize)\n"); }
+  removeSelfLoopsOmpU(x, fl); LOG(""); print(x); printf(" (removeSelfLoops)\n");
   runExperiment(x);
   printf("\n");
   return 0;

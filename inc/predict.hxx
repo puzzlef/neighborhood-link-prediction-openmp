@@ -228,7 +228,8 @@ inline void predictLinksWithIntersectionLoopU(vector<tuple<K, K, W>>& a, vector<
       if (CUSTOMVALUE) predictScanEdgesU     (vedgs, veout, x, v, ft, fu);
       else             predictScanEdgesBasicU(vedgs, veout, x, v, ft);
     });
-    // Avoid first order neighbors.
+    // Avoid self-loops and first order neighbors.
+    veout[u] = V();
     x.forEachEdgeKey(u, [&](auto v) { veout[v] = V(); });
     // Get similarity score, and add to prediction list.
     for (K v : vedgs) {
@@ -301,7 +302,8 @@ inline void predictLinksWithIntersectionLoopOmpU(vector<vector<tuple<K, K, W>>*>
       if (CUSTOMVALUE) predictScanEdgesU     (*vedgs[t], *veout[t], x, v, ft, fu);
       else             predictScanEdgesBasicU(*vedgs[t], *veout[t], x, v, ft);
     });
-    // Avoid first order neighbors.
+    // Avoid self-loops and first order neighbors.
+    (*veout[t])[u] = V();
     x.forEachEdgeKey(u, [&](auto v) { (*veout[t])[v] = V(); });
     // Get similarity score, and add to prediction list.
     for (K v : *vedgs[t]) {
