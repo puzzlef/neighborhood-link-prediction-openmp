@@ -47,7 +47,8 @@ using namespace std;
  */
 #define PREDICT_LINKS(x, fn, deg, insertionsf, insertions0) \
   { \
-    auto p1 = fn<deg>(x, {repeat, insertions0.size()/2}); \
+    size_t insertionsc = size_t(insertionsf * x.size()/2); \
+    auto p1 = fn<deg>(x, {repeat, insertionsc}); \
     vector<tuple<K, K, V>> insertions1 = directedInsertions(p1.edges, V(1), true); \
     sort(insertions1.begin(), insertions1.end()); \
     auto it = unique(insertions1.begin(), insertions1.end()); \
@@ -197,8 +198,8 @@ void runExperiment(const G& x) {
   int numThreads = MAX_THREADS;
   // Follow a specific result logging format, which can be easily parsed later.
   auto glog = [&](const auto& ans, const char *technique, double insertionsf, const auto& insertions0, const auto& insertions1, const auto& common1) {
-    double precision = double(common1.size()) / max(insertions1.size(), 1);
-    double recall    = double(common1.size()) / max(insertions0.size(), 1);
+    double precision = double(common1.size()) / max(insertions1.size(), size_t(1));
+    double recall    = double(common1.size()) / max(insertions0.size(), size_t(1));
     printf(
       "{-%.3e/+%.3e batchf, %03d threads} -> {%09.1fms, %09.1fms scoring, %.3e precision, %.3e recall} %s\n",
       0.0, insertionsf, numThreads, ans.time, ans.scoringTime, precision, recall, technique
@@ -207,8 +208,9 @@ void runExperiment(const G& x) {
   // Get predicted links from Original Jaccard coefficient.
   runBatches(x, rnd, [&](const auto& y, auto deletionsf, const auto& deletions, auto insertionsf, const auto& insertions, int sequence, int epoch) {
     if (deletions.empty()) return;
-    vector<tuple<K, K, V>>   deletions0 = directedInsertions(deletions, V(1));
+    vector<tuple<K, K, V>>   deletions0 = directedInsertions(deletions, V(1));  // Deletions is undirected already
     sort(deletions0.begin(), deletions0.end());
+    PREDICT_LINKS_ALL(y, predictLinksCommonNeighborsOmp,         deletionsf, deletions0);
     PREDICT_LINKS_ALL(y, predictLinksJaccardCoefficientOmp,      deletionsf, deletions0);
     PREDICT_LINKS_ALL(y, predictLinksSorensenIndexOmp,           deletionsf, deletions0);
     PREDICT_LINKS_ALL(y, predictLinksSaltonCosineSimilarityOmp,  deletionsf, deletions0);
@@ -238,8 +240,10 @@ int main(int argc, char **argv) {
   LOG("OMP_NUM_THREADS=%d\n", MAX_THREADS);
   LOG("Loading graph %s ...\n", file);
   DiGraph<K, None, V> x;
+  auto fl = [](auto u) { return true; };
   readMtxOmpW(x, file, weighted); LOG(""); println(x);
   if (!symmetric) { x = symmetrizeOmp(x); LOG(""); print(x); printf(" (symmetrize)\n"); }
+  removeSelfLoopsOmpU(x, fl); LOG(""); print(x); printf(" (removeSelfLoops)\n");
   runExperiment(x);
   printf("\n");
   return 0;
