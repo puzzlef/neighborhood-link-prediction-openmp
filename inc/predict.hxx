@@ -20,6 +20,8 @@ using std::max;
 using std::get;
 using std::sort;
 using std::make_heap;
+using std::push_heap;
+using std::pop_heap;
 
 
 
@@ -238,7 +240,10 @@ inline void predictLinksWithIntersectionLoopU(vector<tuple<K, K, W>>& a, vector<
       auto  fl = [](const auto& x, const auto& y) { return get<2>(x) > get<2>(y); };
       if (FORCEHEAP) {
         if (A>=NMAX && score < get<2>(a[0])) continue;
-        if (A>=NMAX) pop_heap(a.begin(), a.end(), fl);
+        if (A>=NMAX) {
+          pop_heap(a.begin(), a.end(), fl);
+          a.pop_back();
+        }
         a.push_back({u, v, score});
         push_heap(a.begin(), a.end(), fl);
       }
@@ -252,7 +257,7 @@ inline void predictLinksWithIntersectionLoopU(vector<tuple<K, K, W>>& a, vector<
         // Use min-heap to store top NMAX edges only.
         if (score < get<2>(a[0])) continue;
         pop_heap(a.begin(), a.end(), fl);
-        a.push_back({u, v, score});
+        a.back() = {u, v, score};
         push_heap(a.begin(), a.end(), fl);
       }
     }
@@ -308,7 +313,10 @@ inline void predictLinksWithIntersectionLoopOmpU(vector<vector<tuple<K, K, W>>*>
       auto  fl = [](const auto& x, const auto& y) { return get<2>(x) > get<2>(y); };
       if (FORCEHEAP) {
         if (A>=NMAX && score < get<2>((*as[t])[0])) continue;
-        if (A>=NMAX) pop_heap((*as[t]).begin(), (*as[t]).end(), fl);
+        if (A>=NMAX) {
+          pop_heap((*as[t]).begin(), (*as[t]).end(), fl);
+          (*as[t]).pop_back();
+        }
         (*as[t]).push_back({u, v, score});
         push_heap((*as[t]).begin(), (*as[t]).end(), fl);
       }
@@ -322,7 +330,7 @@ inline void predictLinksWithIntersectionLoopOmpU(vector<vector<tuple<K, K, W>>*>
         // Use min-heap to store top NMAX edges only.
         if (score < get<2>((*as[t])[0])) continue;
         pop_heap((*as[t]).begin(), (*as[t]).end(), fl);
-        (*as[t]).push_back({u, v, score});
+        (*as[t]).back() = {u, v, score};
         push_heap((*as[t]).begin(), (*as[t]).end(), fl);
       }
     }
