@@ -42,8 +42,11 @@ DEFINES=(""
 "-DBATCH_INSERTIONS_STEP=$BATCH_INSERTIONS_STEP"
 )
 
-# Run
+# Compile
 g++ ${DEFINES[*]} -std=c++17 -O3 -fopenmp main.cxx
+
+# Run on each graph
+runEach() {
 stdbuf --output=L ./a.out ~/Data/indochina-2004.mtx  0 0 2>&1 | tee -a "$out"
 stdbuf --output=L ./a.out ~/Data/uk-2002.mtx         0 0 2>&1 | tee -a "$out"
 stdbuf --output=L ./a.out ~/Data/arabic-2005.mtx     0 0 2>&1 | tee -a "$out"
@@ -57,6 +60,12 @@ stdbuf --output=L ./a.out ~/Data/asia_osm.mtx        1 0 2>&1 | tee -a "$out"
 stdbuf --output=L ./a.out ~/Data/europe_osm.mtx      1 0 2>&1 | tee -a "$out"
 stdbuf --output=L ./a.out ~/Data/kmer_A2a.mtx        1 0 2>&1 | tee -a "$out"
 stdbuf --output=L ./a.out ~/Data/kmer_V1r.mtx        1 0 2>&1 | tee -a "$out"
+}
+
+# Run 5 times
+for i in {1..5}; do
+  runEach
+done
 
 # Signal completion
 curl -X POST "https://maker.ifttt.com/trigger/puzzlef/with/key/${IFTTT_KEY}?value1=$src$1"
