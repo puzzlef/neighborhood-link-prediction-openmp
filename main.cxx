@@ -47,7 +47,8 @@ using namespace std;
  */
 #define PREDICT_LINKS(x, fn, deg, insertionsf, insertions0, threads) \
   { \
-    auto p1 = fn<deg>(x, {repeat, insertions0.size()/2}); \
+    size_t insertionsc = size_t(insertionsf * x.size()/2); \
+    auto p1 = fn<deg>(x, {repeat, insertionsc}); \
     vector<tuple<K, K, V>> insertions1 = directedInsertions(p1.edges, V(1), true); \
     sort(insertions1.begin(), insertions1.end()); \
     auto it = unique(insertions1.begin(), insertions1.end()); \
@@ -207,30 +208,19 @@ void runExperiment(const G& x) {
   // Get predicted links from Original Jaccard coefficient.
   runBatches(x, rnd, [&](const auto& y, auto deletionsf, const auto& deletions, auto insertionsf, const auto& insertions, int sequence, int epoch) {
     if (deletions.empty()) return;
-    vector<tuple<K, K, V>>   deletions0 = directedInsertions(deletions, V(1));
+    vector<tuple<K, K, V>>   deletions0 = directedInsertions(deletions, V(1));  // Deletions is undirected already
     sort(deletions0.begin(), deletions0.end());
     for (int threads=1; threads<=numThreads; threads*=2) {
       omp_set_num_threads(threads);
-      if (deletionsf < 1e-2) {
-        PREDICT_LINKS(y, predictLinksJaccardCoefficientOmp,      256, deletionsf, deletions0, threads);
-        PREDICT_LINKS(y, predictLinksSorensenIndexOmp,           256, deletionsf, deletions0, threads);
-        PREDICT_LINKS(y, predictLinksSaltonCosineSimilarityOmp,  256, deletionsf, deletions0, threads);
-        PREDICT_LINKS(y, predictLinksHubPromotedOmp,               4, deletionsf, deletions0, threads);
-        PREDICT_LINKS(y, predictLinksHubDepressedOmp,            256, deletionsf, deletions0, threads);
-        PREDICT_LINKS(y, predictLinksLeichtHolmeNermanScoreOmp,  128, deletionsf, deletions0, threads);
-        PREDICT_LINKS(y, predictLinksAdamicAdarCoefficientOmp,     4, deletionsf, deletions0, threads);
-        PREDICT_LINKS(y, predictLinksResourceAllocationScoreOmp, 512, deletionsf, deletions0, threads);
-      }
-      else {
-        PREDICT_LINKS(y, predictLinksJaccardCoefficientOmp,       16, deletionsf, deletions0, threads);
-        PREDICT_LINKS(y, predictLinksSorensenIndexOmp,            16, deletionsf, deletions0, threads);
-        PREDICT_LINKS(y, predictLinksSaltonCosineSimilarityOmp,   16, deletionsf, deletions0, threads);
-        PREDICT_LINKS(y, predictLinksHubPromotedOmp,               4, deletionsf, deletions0, threads);
-        PREDICT_LINKS(y, predictLinksHubDepressedOmp,             16, deletionsf, deletions0, threads);
-        PREDICT_LINKS(y, predictLinksLeichtHolmeNermanScoreOmp,    4, deletionsf, deletions0, threads);
-        PREDICT_LINKS(y, predictLinksAdamicAdarCoefficientOmp,     4, deletionsf, deletions0, threads);
-        PREDICT_LINKS(y, predictLinksResourceAllocationScoreOmp,   4, deletionsf, deletions0, threads);
-      }
+      PREDICT_LINKS(y, predictLinksCommonNeighborsOmp,          32, deletionsf, deletions0, threads);
+      PREDICT_LINKS(y, predictLinksJaccardCoefficientOmp,      256, deletionsf, deletions0, threads);
+      PREDICT_LINKS(y, predictLinksSorensenIndexOmp,           256, deletionsf, deletions0, threads);
+      PREDICT_LINKS(y, predictLinksSaltonCosineSimilarityOmp,  256, deletionsf, deletions0, threads);
+      PREDICT_LINKS(y, predictLinksHubPromotedOmp,               4, deletionsf, deletions0, threads);
+      PREDICT_LINKS(y, predictLinksHubDepressedOmp,            256, deletionsf, deletions0, threads);
+      PREDICT_LINKS(y, predictLinksLeichtHolmeNermanScoreOmp,    4, deletionsf, deletions0, threads);
+      PREDICT_LINKS(y, predictLinksAdamicAdarCoefficientOmp,    32, deletionsf, deletions0, threads);
+      PREDICT_LINKS(y, predictLinksResourceAllocationScoreOmp, 256, deletionsf, deletions0, threads);
       omp_set_num_threads(numThreads);
     }
   });
@@ -254,8 +244,10 @@ int main(int argc, char **argv) {
   LOG("OMP_NUM_THREADS=%d\n", MAX_THREADS);
   LOG("Loading graph %s ...\n", file);
   DiGraph<K, None, V> x;
+  auto fl = [](auto u) { return true; };
   readMtxOmpW(x, file, weighted); LOG(""); println(x);
   if (!symmetric) { x = symmetrizeOmp(x); LOG(""); print(x); printf(" (symmetrize)\n"); }
+  removeSelfLoopsOmpU(x, fl); LOG(""); print(x); printf(" (removeSelfLoops)\n");
   runExperiment(x);
   printf("\n");
   return 0;
