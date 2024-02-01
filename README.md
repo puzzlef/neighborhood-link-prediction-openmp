@@ -103,6 +103,7 @@ Note that each branch in this repository contains code for a specific experiment
 
 [![](https://i.imgur.com/xCTUbVR.jpg)](https://www.youtube.com/watch?v=yqO7wVBTuLw&pp)<br>
 [![ORG](https://img.shields.io/badge/org-puzzlef-green?logo=Org)](https://puzzlef.github.io)
+[![DOI](https://zenodo.org/badge/689546501.svg)](https://zenodo.org/doi/10.5281/zenodo.10607304)
 
 
 [Prof. Dip Sankar Banerjee]: https://sites.google.com/site/dipsankarban/
