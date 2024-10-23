@@ -4,7 +4,7 @@ authors:
   - family-names: Sahu
     given-names: Subhajit
     orcid: https://orcid.org/0000-0001-5140-6578
-title: "puzzlef/neighborhood-link-prediction-openmp: Design of OpenMP-based Parallel Neighborhood-based Link prediction approaches"
+title: "A Fast Parallel Approach for Neighborhood-based Link Prediction by Disregarding Large Hubs"
 version: 1.0.0
-doi: 10.5281/zenodo.10607305
-date-released: 2024-02-02
+doi: 10.48550/arXiv.2401.11415
+date-released: 2024-01-21

@@ -24,7 +24,7 @@ Finally, we plot the F1 score for links predicted with the *IHub* and *LHub* app
 
 <br>
 
-Refer to our technical report for more details:
+Refer to our technical report for more details: \
 [A Fast Parallel Approach for Neighborhood-based Link Prediction by Disregarding Large Hubs][report].
 
 <br>
